@@ -1,0 +1,65 @@
+#!/bin/bash
+set -e
+
+APP_NAME="yt-dld"
+BIN_DIR="$(cd "$(dirname "$0")/.." && pwd)/bin"
+DIST_DIR="$(cd "$(dirname "$0")/.." && pwd)/dist"
+BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)/build"
+
+# Ensure ffmpeg binaries exist for all platforms
+mkdir -p "$BIN_DIR/ffmpeg-macos" "$BIN_DIR/ffmpeg-windows" "$BIN_DIR/ffmpeg-linux"
+
+# Download macOS ffmpeg if not present
+if [ ! -f "$BIN_DIR/ffmpeg-macos/ffmpeg" ]; then
+    echo "Downloading ffmpeg for macOS..."
+    curl -SL "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" -o /tmp/ffmpeg-macos.zip
+    unzip -o /tmp/ffmpeg-macos.zip -d "$BIN_DIR/ffmpeg-macos/"
+    rm /tmp/ffmpeg-macos.zip
+    chmod +x "$BIN_DIR/ffmpeg-macos/ffmpeg"
+fi
+
+if [ ! -f "$BIN_DIR/ffmpeg-macos/ffprobe" ]; then
+    echo "Downloading ffprobe for macOS..."
+    curl -SL "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip" -o /tmp/ffprobe-macos.zip
+    unzip -o /tmp/ffprobe-macos.zip -d "$BIN_DIR/ffmpeg-macos/"
+    rm /tmp/ffprobe-macos.zip
+    chmod +x "$BIN_DIR/ffmpeg-macos/ffprobe"
+fi
+
+# Download Windows ffmpeg if not present
+if [ ! -f "$BIN_DIR/ffmpeg-windows/ffmpeg.exe" ]; then
+    echo "Downloading ffmpeg for Windows..."
+    curl -SL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -o /tmp/ffmpeg-windows.zip
+    unzip -o /tmp/ffmpeg-windows.zip -d /tmp/ffmpeg-windows-extract/
+    cp /tmp/ffmpeg-windows-extract/ffmpeg-master-latest-win64-gpl/bin/ffmpeg.exe "$BIN_DIR/ffmpeg-windows/"
+    cp /tmp/ffmpeg-windows-extract/ffmpeg-master-latest-win64-gpl/bin/ffprobe.exe "$BIN_DIR/ffmpeg-windows/"
+    rm -rf /tmp/ffmpeg-windows.zip /tmp/ffmpeg-windows-extract/
+fi
+
+# Download Linux ffmpeg if not present
+if [ ! -f "$BIN_DIR/ffmpeg-linux/ffmpeg" ]; then
+    echo "Downloading ffmpeg for Linux..."
+    curl -SL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o /tmp/ffmpeg-linux.tar.xz
+    tar -xf /tmp/ffmpeg-linux.tar.xz -C /tmp/
+    cp /tmp/ffmpeg-*-amd64-static/ffmpeg "$BIN_DIR/ffmpeg-linux/"
+    cp /tmp/ffmpeg-*-amd64-static/ffprobe "$BIN_DIR/ffmpeg-linux/"
+    rm -rf /tmp/ffmpeg-linux.tar.xz /tmp/ffmpeg-*-amd64-static/
+fi
+
+echo "All ffmpeg binaries ready."
+
+# Build macOS .app
+pyinstaller \
+    --name "$APP_NAME" \
+    --windowed \
+    --icon=src/yt_dld/resources/icons/app.icns \
+    --add-data "bin/ffmpeg-macos:bin/ffmpeg-macos" \
+    --add-data "src/yt_dld:yt_dld" \
+    --hidden-import yt_dlp \
+    --hidden-import PySide6 \
+    --collect-all yt_dlp \
+    --noconfirm \
+    --clean \
+    src/yt_dld/__main__.py
+
+echo "Build complete: dist/$APP_NAME.app"
