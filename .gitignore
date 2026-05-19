@@ -10,4 +10,7 @@ venv/
 *.spec
 *.app
 bin/
+dist/
+build/
 .DS_Store
+*.pkg
