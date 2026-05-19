@@ -149,8 +149,11 @@ class DownloadTab(QWidget):
                 QMessageBox.warning(self, tr("fetch_error_title"), tr("no_videos_selected"))
                 return
             selected_urls_for_download = selected_urls
+            per_video_settings = self._playlist_selector.get_settings()
+            self._playlist_selector.lock()
         else:
             selected_urls_for_download = None
+            per_video_settings = None
 
         format_id = self._format_selector.selected_format_id()
 
@@ -161,6 +164,7 @@ class DownloadTab(QWidget):
             playlist_subfolder=use_subfolder,
             ffmpeg_path=self._ffmpeg_path,
             selected_urls=selected_urls_for_download,
+            per_video_settings=per_video_settings,
         )
         self._worker.progress.connect(self._progress_widget.update_progress)
         self._worker.item_error.connect(self._on_item_error)
@@ -205,3 +209,4 @@ class DownloadTab(QWidget):
     def _reset_buttons(self):
         self._fetch_btn.setEnabled(True)
         self._cancel_btn.setEnabled(False)
+        self._playlist_selector.unlock()

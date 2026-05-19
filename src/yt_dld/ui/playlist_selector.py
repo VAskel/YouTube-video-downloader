@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor
 
 from yt_dld.core.i18n import tr
+from yt_dld.ui.video_settings_dialog import VideoSettingsDialog
 
 
 def _format_duration(secs):
@@ -20,6 +21,8 @@ class PlaylistSelector(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._entries = []
+        self._settings = {}
+        self._locked = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -43,9 +46,9 @@ class PlaylistSelector(QWidget):
 
         layout.addLayout(top)
 
-        self._table = QTableWidget(0, 4)
+        self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels([
-            "", tr("error_table_index"), tr("error_table_title"), tr("format_resolution"),
+            "", tr("error_table_index"), tr("error_table_title"), tr("duration"), "⚙",
         ])
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -56,6 +59,8 @@ class PlaylistSelector(QWidget):
         self._table.setColumnWidth(1, 40)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(4, 30)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
 
@@ -64,6 +69,7 @@ class PlaylistSelector(QWidget):
 
     def load_entries(self, entries):
         self._entries = entries
+        self._settings = {}
         self._table.setRowCount(0)
 
         available = sum(1 for e in entries if e.get("available"))
@@ -101,14 +107,23 @@ class PlaylistSelector(QWidget):
             dur_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(row, 3, dur_item)
 
+            gear_item = QTableWidgetItem("⚙")
+            gear_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            gear_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self._table.setItem(row, 4, gear_item)
+
             if not entry.get("available"):
                 gray = QBrush(QColor(160, 160, 160))
-                for col in range(4):
+                for col in range(5):
                     self._table.item(row, col).setForeground(gray)
 
     def _on_cell_clicked(self, row, col):
-        if col != 0:
-            return
+        if col == 0:
+            self._toggle_checkbox(row)
+        elif col == 4:
+            self._open_settings(row)
+
+    def _toggle_checkbox(self, row):
         item = self._table.item(row, 0)
         available = item.data(Qt.ItemDataRole.UserRole)
         if not available:
@@ -121,6 +136,24 @@ class PlaylistSelector(QWidget):
         else:
             item.setCheckState(Qt.CheckState.Checked)
             item.setText("☑")
+
+    def _open_settings(self, row):
+        if self._locked:
+            return
+        entry = self._entries[row]
+        if not entry.get("available"):
+            return
+        url = entry.get("url")
+        if not url:
+            return
+
+        current = self._settings.get(url)
+        dlg = VideoSettingsDialog(entry["title"], current, self)
+        if dlg.exec():
+            self._settings[url] = dlg.settings()
+            gear_item = self._table.item(row, 4)
+            if gear_item:
+                gear_item.setText("⚙✓")
 
     def _select_all(self):
         for row in range(self._table.rowCount()):
@@ -152,7 +185,36 @@ class PlaylistSelector(QWidget):
             if self._table.item(row, 0).checkState() == Qt.CheckState.Checked
         )
 
+    def get_settings(self):
+        return dict(self._settings)
+
+    def lock(self):
+        self._locked = True
+        self._select_all_btn.setEnabled(False)
+        self._deselect_all_btn.setEnabled(False)
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 0)
+            item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            gear = self._table.item(row, 4)
+            if gear:
+                gear.setFlags(Qt.ItemFlag.NoItemFlags)
+
+    def unlock(self):
+        self._locked = False
+        self._select_all_btn.setEnabled(True)
+        self._deselect_all_btn.setEnabled(True)
+        for row in range(self._table.rowCount()):
+            entry = self._entries[row]
+            flags = Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
+            item = self._table.item(row, 0)
+            item.setFlags(flags)
+            if entry.get("available"):
+                gear = self._table.item(row, 4)
+                if gear:
+                    gear.setFlags(Qt.ItemFlag.ItemIsEnabled)
+
     def clear(self):
         self._table.setRowCount(0)
         self._entries = []
+        self._settings = {}
         self._info_label.setText("")

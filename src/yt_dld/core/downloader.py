@@ -11,7 +11,7 @@ class DownloadWorker(QThread):
     error = Signal(str)
 
     def __init__(self, url, output_path, format_id=None, playlist_subfolder=False,
-                 ffmpeg_path=None, selected_urls=None, parent=None):
+                 ffmpeg_path=None, selected_urls=None, per_video_settings=None, parent=None):
         super().__init__(parent)
         self.url = url
         self.output_path = output_path
@@ -19,6 +19,7 @@ class DownloadWorker(QThread):
         self.playlist_subfolder = playlist_subfolder
         self.ffmpeg_path = ffmpeg_path
         self.selected_urls = selected_urls or []
+        self.per_video_settings = per_video_settings or {}
         self._cancelled = False
 
     def cancel(self):
@@ -109,17 +110,45 @@ class DownloadWorker(QThread):
                 self.error.emit(str(e))
 
     def _download_selected(self):
-        opts = self._build_opts({"noplaylist": True})
+        base_opts = self._build_opts({"noplaylist": True})
         errors = []
+        total = len(self.selected_urls)
 
         for i, u in enumerate(self.selected_urls):
             if self._cancelled:
                 break
+
+            opts = dict(base_opts)
+            vsettings = self.per_video_settings.get(u, {})
+
+            if vsettings.get("format"):
+                opts["format"] = vsettings["format"]
+            elif self.format_id and self.format_id != "best":
+                opts["format"] = self.format_id
+
+            if vsettings.get("filename"):
+                opts["outtmpl"] = os.path.join(
+                    self.output_path,
+                    vsettings["filename"] + ".%(ext)s",
+                )
+
+            self.progress.emit({
+                "status": "downloading",
+                "percent": 0,
+                "total_bytes": 0,
+                "downloaded_bytes": 0,
+                "speed": 0,
+                "eta": 0,
+                "filename": vsettings.get("filename", u),
+                "playlist_index": i + 1,
+                "playlist_count": total,
+            })
+
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([u])
             except Exception as e:
-                err = {"url": u, "title": u, "error": str(e)}
+                err = {"url": u, "title": vsettings.get("filename", u), "error": str(e)}
                 errors.append(err)
                 self.item_error.emit(err)
 

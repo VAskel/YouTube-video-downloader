@@ -63,6 +63,15 @@ STRINGS = {
     "item_skipped": {"ru": "Пропущено", "en": "Skipped"},
     "item_error": {"ru": "Ошибка", "en": "Error"},
     "fetch_first": {"ru": "Сначала нажмите Fetch", "en": "Click Fetch first"},
+    "duration": {"ru": "Длит.", "en": "Duration"},
+    "per_video_settings": {"ru": "Настройки скачивания", "en": "Download settings"},
+    "settings_format": {"ru": "Формат:", "en": "Format:"},
+    "settings_format_best": {"ru": "Лучшее качество", "en": "Best quality"},
+    "settings_format_video_only": {"ru": "Только видео (mp4)", "en": "Video only (mp4)"},
+    "settings_format_audio_only": {"ru": "Только аудио (m4a)", "en": "Audio only (m4a)"},
+    "settings_format_video_audio": {"ru": "Видео + аудио (mp4)", "en": "Video + Audio (mp4)"},
+    "settings_filename": {"ru": "Имя файла:", "en": "Filename:"},
+    "settings_apply": {"ru": "Применить", "en": "Apply"},
 }
 
 
