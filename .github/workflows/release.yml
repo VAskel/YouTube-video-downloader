@@ -1,0 +1,175 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install yt-dlp PySide6 pyinstaller
+
+      - name: Download FFmpeg (macOS)
+        run: |
+          mkdir -p bin/ffmpeg-macos
+          curl -SL "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" -o /tmp/ffmpeg.zip
+          unzip -o /tmp/ffmpeg.zip -d bin/ffmpeg-macos/
+          curl -SL "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip" -o /tmp/ffprobe.zip
+          unzip -o /tmp/ffprobe.zip -d bin/ffmpeg-macos/
+          chmod +x bin/ffmpeg-macos/ffmpeg bin/ffmpeg-macos/ffprobe
+
+      - name: Build .app
+        run: |
+          pyinstaller \
+            --name "yt-dld" \
+            --windowed \
+            --add-data "bin/ffmpeg-macos:bin/ffmpeg-macos" \
+            --add-data "src/yt_dld:yt_dld" \
+            --hidden-import yt_dlp \
+            --hidden-import PySide6 \
+            --collect-all yt_dlp \
+            --noconfirm \
+            --clean \
+            src/yt_dld/__main__.py
+
+      - name: Package .app
+        run: |
+          cd dist
+          zip -r -9 yt-dld-${{ github.ref_name }}-macos-arm64.zip yt-dld.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-dld-macos
+          path: dist/yt-dld-${{ github.ref_name }}-macos-arm64.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install yt-dlp PySide6 pyinstaller
+
+      - name: Download FFmpeg (Windows)
+        run: |
+          mkdir bin\ffmpeg-windows
+          curl -SL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -o %TEMP%\ffmpeg.zip
+          powershell -Command "Expand-Archive '%TEMP%\ffmpeg.zip' '%TEMP%\ffmpeg-extract'"
+          for /d %%d in (%TEMP%\ffmpeg-extract\*) do (
+            copy "%%d\bin\ffmpeg.exe" "bin\ffmpeg-windows\"
+            copy "%%d\bin\ffprobe.exe" "bin\ffmpeg-windows\"
+          )
+
+      - name: Build .exe
+        run: |
+          pyinstaller `
+            --name "yt-dld" `
+            --windowed `
+            --add-data "bin/ffmpeg-windows;bin/ffmpeg-windows" `
+            --add-data "src/yt_dld;yt_dld" `
+            --hidden-import yt_dlp `
+            --hidden-import PySide6 `
+            --collect-all yt_dlp `
+            --noconfirm `
+            --clean `
+            src/yt_dld/__main__.py
+
+      - name: Package .exe
+        run: |
+          cd dist
+          powershell -Command "Compress-Archive yt-dld yt-dld-${{ github.ref_name }}-windows-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-dld-windows
+          path: dist/yt-dld-${{ github.ref_name }}-windows-x64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libopengl0
+
+      - name: Install dependencies
+        run: |
+          pip install yt-dlp PySide6 pyinstaller
+
+      - name: Download FFmpeg (Linux)
+        run: |
+          mkdir -p bin/ffmpeg-linux
+          curl -SL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o /tmp/ffmpeg.tar.xz
+          tar -xf /tmp/ffmpeg.tar.xz -C /tmp/
+          cp /tmp/ffmpeg-*-amd64-static/ffmpeg bin/ffmpeg-linux/
+          cp /tmp/ffmpeg-*-amd64-static/ffprobe bin/ffmpeg-linux/
+          chmod +x bin/ffmpeg-linux/ffmpeg bin/ffmpeg-linux/ffprobe
+
+      - name: Build binary
+        run: |
+          pyinstaller \
+            --name "yt-dld" \
+            --windowed \
+            --add-data "bin/ffmpeg-linux:bin/ffmpeg-linux" \
+            --add-data "src/yt_dld:yt_dld" \
+            --hidden-import yt_dlp \
+            --hidden-import PySide6 \
+            --collect-all yt_dlp \
+            --noconfirm \
+            --clean \
+            src/yt_dld/__main__.py
+
+      - name: Package binary
+        run: |
+          cd dist
+          tar -czf yt-dld-${{ github.ref_name }}-linux-x64.tar.gz yt-dld
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-dld-linux
+          path: dist/yt-dld-${{ github.ref_name }}-linux-x64.tar.gz
+
+  release:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            yt-dld-macos/yt-dld-*.zip
+            yt-dld-windows/yt-dld-*.zip
+            yt-dld-linux/yt-dld-*.tar.gz
+          generate_release_notes: true
