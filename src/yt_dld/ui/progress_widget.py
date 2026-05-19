@@ -25,6 +25,7 @@ def _format_eta(seconds):
 class ProgressWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._last_logged_fn = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -72,7 +73,8 @@ class ProgressWidget(QWidget):
             else:
                 self._playlist_label.setText("")
 
-            if fn:
+            if fn and fn != self._last_logged_fn:
+                self._last_logged_fn = fn
                 self._append_log(f"[↓] {fn}")
 
         elif status == "finished":
@@ -89,6 +91,7 @@ class ProgressWidget(QWidget):
         self._speed_label.setText("")
         self._eta_label.setText("")
         self._playlist_label.setText("")
+        self._last_logged_fn = None
 
     def _append_log(self, text):
         self._log.append(text)

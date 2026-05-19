@@ -1,6 +1,6 @@
 import yt_dlp
 
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QMessageBox, QMenuBar, QStatusBar
+from PySide6.QtWidgets import QMainWindow, QMessageBox, QStatusBar
 from PySide6.QtGui import QAction
 
 from yt_dld.core.i18n import tr
@@ -36,10 +36,8 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     def _setup_ui(self):
-        self._tabs = QTabWidget()
         self._download_tab = DownloadTab(ffmpeg_path=self._ffmpeg_path)
-        self._tabs.addTab(self._download_tab, tr("download_tab"))
-        self.setCentralWidget(self._tabs)
+        self.setCentralWidget(self._download_tab)
 
     def _setup_status(self):
         self._status = QStatusBar()

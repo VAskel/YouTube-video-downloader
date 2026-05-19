@@ -8,24 +8,57 @@ class FormatFetcher:
             "quiet": True,
             "no_warnings": True,
             "extract_flat": False,
+            "ignoreerrors": True,
         }
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
         if "entries" in info:
             title = info.get("title", "Playlist")
-            entries = info["entries"] or []
-            is_playlist = True
-            formats = []
-            for entry in entries:
-                if entry:
-                    entry["_playlist_title"] = title
-                formats.append(entry)
+            raw_entries = info["entries"] or []
+            entries = []
+            available_count = 0
+            unavailable_count = 0
+
+            for idx, entry in enumerate(raw_entries):
+                if entry is None:
+                    entries.append({
+                        "index": idx + 1,
+                        "title": f"Video #{idx + 1}",
+                        "url": None,
+                        "available": False,
+                        "duration": None,
+                        "_playlist_title": title,
+                    })
+                    unavailable_count += 1
+                elif isinstance(entry, dict):
+                    entry_url = entry.get("webpage_url") or entry.get("url")
+                    avail = entry.get("availability")
+                    is_unavailable = (
+                        avail is not None and avail != "public"
+                        or entry.get("live_status") == "is_upcoming"
+                        or not entry_url
+                    )
+                    entries.append({
+                        "index": idx + 1,
+                        "title": entry.get("title", f"Video #{idx + 1}"),
+                        "url": entry_url,
+                        "available": not is_unavailable,
+                        "duration": entry.get("duration"),
+                        "_playlist_title": title,
+                    })
+                    if is_unavailable:
+                        unavailable_count += 1
+                    else:
+                        available_count += 1
+
             return {
                 "type": "playlist",
                 "title": title,
                 "entries": entries,
                 "count": len(entries),
+                "available_count": available_count,
+                "unavailable_count": unavailable_count,
             }
 
         formats = info.get("formats", [])

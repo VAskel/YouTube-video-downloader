@@ -46,6 +46,23 @@ STRINGS = {
     "playlist_title": {"ru": "Плейлист", "en": "Playlist"},
     "fetch_error_title": {"ru": "Ошибка", "en": "Error"},
     "format_not_found": {"ru": "Форматы не найдены", "en": "Formats not found"},
+    "select_all": {"ru": "Выбрать все", "en": "Select all"},
+    "deselect_all": {"ru": "Снять все", "en": "Deselect all"},
+    "available_count": {"ru": "Доступно", "en": "Available"},
+    "unavailable_count": {"ru": "Недоступно", "en": "Unavailable"},
+    "hidden_video": {"ru": "Видео скрыто", "en": "Video hidden"},
+    "playlist_skip_unavailable": {"ru": "Пропущено %d недоступных видео", "en": "Skipped %d unavailable videos"},
+    "error_dialog_title": {"ru": "Ошибки скачивания", "en": "Download errors"},
+    "errors_count": {"ru": "%d из %d видео не скачались", "en": "%d of %d videos failed"},
+    "error_table_index": {"ru": "№", "en": "#"},
+    "error_table_title": {"ru": "Название", "en": "Title"},
+    "error_table_error": {"ru": "Ошибка", "en": "Error"},
+    "copy_errors": {"ru": "Копировать", "en": "Copy"},
+    "close": {"ru": "Закрыть", "en": "Close"},
+    "no_videos_selected": {"ru": "Не выбрано ни одного видео", "en": "No videos selected"},
+    "item_skipped": {"ru": "Пропущено", "en": "Skipped"},
+    "item_error": {"ru": "Ошибка", "en": "Error"},
+    "fetch_first": {"ru": "Сначала нажмите Fetch", "en": "Click Fetch first"},
 }
 
 
