@@ -20,7 +20,6 @@ BROWSERS = [
     ("edge", "Edge"),
     ("firefox", "Firefox"),
     ("opera", "Opera"),
-    ("safari", "Safari"),
     ("vivaldi", "Vivaldi"),
 ]
 
@@ -156,6 +155,11 @@ class SettingsDialog(QDialog):
 
         auth_layout.addWidget(self._auth_stack)
 
+        self._auth_hint = QLabel("")
+        self._auth_hint.setStyleSheet("color: #888; font-size: 11px;")
+        self._auth_hint.setWordWrap(True)
+        auth_layout.addWidget(self._auth_hint)
+
         self._auth_group.buttonClicked.connect(self._on_auth_changed)
         layout.addWidget(auth_group)
 
@@ -166,6 +170,10 @@ class SettingsDialog(QDialog):
 
     def _on_auth_changed(self, btn):
         self._auth_stack.setCurrentIndex(self._auth_group.id(btn))
+        if self._auth_group.checkedId() == 1:
+            self._auth_hint.setText(tr("auth_browser_hint"))
+        else:
+            self._auth_hint.setText("")
 
     def _load(self):
         settings = load_settings()

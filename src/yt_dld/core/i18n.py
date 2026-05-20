@@ -81,6 +81,14 @@ STRINGS = {
     "auth_cookies_file": {"ru": "Файл cookies:", "en": "Cookies file:"},
     "auth_username": {"ru": "Логин:", "en": "Username:"},
     "auth_password": {"ru": "Пароль:", "en": "Password:"},
+    "auth_browser_hint": {
+        "ru": "При первом использовании macOS запросит доступ к Keychain. Нажмите «Разрешить».",
+        "en": "On first use, macOS will ask for Keychain access. Click «Allow»."
+    },
+    "auth_browser_safari_removed": {
+        "ru": "Safari не поддерживается (блокировка sandbox на macOS). Используйте Chrome или Firefox.",
+        "en": "Safari is not supported (sandbox restriction on macOS). Use Chrome or Firefox."
+    },
 }
 
 
