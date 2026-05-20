@@ -16,9 +16,10 @@ from yt_dld.ui.error_dialog import ErrorDialog
 
 
 class DownloadTab(QWidget):
-    def __init__(self, ffmpeg_path=None, parent=None):
+    def __init__(self, ffmpeg_path=None, auth_opts=None, parent=None):
         super().__init__(parent)
         self._ffmpeg_path = ffmpeg_path
+        self._auth_opts = auth_opts or {}
         self._worker = None
         self._playlist_info = None
         self._setup_ui()
@@ -95,7 +96,7 @@ class DownloadTab(QWidget):
         self._playlist_cb.setVisible(False)
 
         try:
-            info = FormatFetcher.fetch(url)
+            info = FormatFetcher.fetch(url, auth_opts=self._auth_opts)
         except Exception as e:
             QMessageBox.critical(self, tr("fetch_error_title"), f"{tr('error_fetch')}: {e}")
             self._fetch_btn.setEnabled(True)
@@ -165,6 +166,7 @@ class DownloadTab(QWidget):
             ffmpeg_path=self._ffmpeg_path,
             selected_urls=selected_urls_for_download,
             per_video_settings=per_video_settings,
+            auth_opts=self._auth_opts,
         )
         self._worker.progress.connect(self._progress_widget.update_progress)
         self._worker.item_error.connect(self._on_item_error)

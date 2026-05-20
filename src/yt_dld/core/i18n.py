@@ -72,6 +72,15 @@ STRINGS = {
     "settings_format_video_audio": {"ru": "Видео + аудио (mp4)", "en": "Video + Audio (mp4)"},
     "settings_filename": {"ru": "Имя файла:", "en": "Filename:"},
     "settings_apply": {"ru": "Применить", "en": "Apply"},
+    "auth_title": {"ru": "Авторизация YouTube", "en": "YouTube Auth"},
+    "auth_none": {"ru": "Без авторизации", "en": "No auth"},
+    "auth_browser": {"ru": "Cookies из браузера", "en": "Cookies from browser"},
+    "auth_file": {"ru": "Файл cookies.txt", "en": "Cookies file"},
+    "auth_login": {"ru": "Логин / пароль", "en": "Username / password"},
+    "auth_browser_select": {"ru": "Браузер:", "en": "Browser:"},
+    "auth_cookies_file": {"ru": "Файл cookies:", "en": "Cookies file:"},
+    "auth_username": {"ru": "Логин:", "en": "Username:"},
+    "auth_password": {"ru": "Пароль:", "en": "Password:"},
 }
 
 

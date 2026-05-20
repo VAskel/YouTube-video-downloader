@@ -11,7 +11,8 @@ class DownloadWorker(QThread):
     error = Signal(str)
 
     def __init__(self, url, output_path, format_id=None, playlist_subfolder=False,
-                 ffmpeg_path=None, selected_urls=None, per_video_settings=None, parent=None):
+                 ffmpeg_path=None, selected_urls=None, per_video_settings=None,
+                 auth_opts=None, parent=None):
         super().__init__(parent)
         self.url = url
         self.output_path = output_path
@@ -20,6 +21,7 @@ class DownloadWorker(QThread):
         self.ffmpeg_path = ffmpeg_path
         self.selected_urls = selected_urls or []
         self.per_video_settings = per_video_settings or {}
+        self.auth_opts = auth_opts or {}
         self._cancelled = False
 
     def cancel(self):
@@ -89,6 +91,9 @@ class DownloadWorker(QThread):
 
         if self.ffmpeg_path:
             opts["ffmpeg_location"] = os.path.dirname(self.ffmpeg_path)
+
+        if self.auth_opts:
+            opts.update(self.auth_opts)
 
         if extra:
             opts.update(extra)

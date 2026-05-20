@@ -9,34 +9,18 @@ from yt_dld.ui.settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, ffmpeg_path=None):
+    def __init__(self, ffmpeg_path=None, auth_opts=None):
         super().__init__()
         self._ffmpeg_path = ffmpeg_path
+        self._auth_opts = auth_opts or {}
         self.setWindowTitle(tr("app_title"))
         self.resize(800, 700)
         self._setup_menu()
         self._setup_ui()
         self._setup_status()
 
-    def _setup_menu(self):
-        menubar = self.menuBar()
-
-        file_menu = menubar.addMenu(tr("menu_file"))
-        settings_action = QAction(tr("settings_tab"), self)
-        settings_action.triggered.connect(self.show_settings)
-        file_menu.addAction(settings_action)
-        file_menu.addSeparator()
-        exit_action = QAction(tr("menu_exit"), self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-
-        help_menu = menubar.addMenu(tr("menu_help"))
-        about_action = QAction(tr("menu_about"), self)
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
-
     def _setup_ui(self):
-        self._download_tab = DownloadTab(ffmpeg_path=self._ffmpeg_path)
+        self._download_tab = DownloadTab(ffmpeg_path=self._ffmpeg_path, auth_opts=self._auth_opts)
         self.setCentralWidget(self._download_tab)
 
     def _setup_status(self):

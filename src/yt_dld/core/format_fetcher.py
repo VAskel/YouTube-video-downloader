@@ -3,13 +3,15 @@ import yt_dlp
 
 class FormatFetcher:
     @staticmethod
-    def fetch(url):
+    def fetch(url, auth_opts=None):
         opts = {
             "quiet": True,
             "no_warnings": True,
             "extract_flat": False,
             "ignoreerrors": True,
         }
+        if auth_opts:
+            opts.update(auth_opts)
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
