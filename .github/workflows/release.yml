@@ -56,6 +56,9 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: cmd
     steps:
       - uses: actions/checkout@v4
 
@@ -65,8 +68,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: |
-          pip install yt-dlp PySide6 pyinstaller
+        run: pip install yt-dlp PySide6 pyinstaller
 
       - name: Download FFmpeg (Windows)
         run: |
@@ -80,16 +82,16 @@ jobs:
 
       - name: Build .exe
         run: |
-          pyinstaller `
-            --name "yt-dld" `
-            --windowed `
-            --add-data "bin/ffmpeg-windows;bin/ffmpeg-windows" `
-            --add-data "src/yt_dld;yt_dld" `
-            --hidden-import yt_dlp `
-            --hidden-import PySide6 `
-            --collect-all yt_dlp `
-            --noconfirm `
-            --clean `
+          pyinstaller ^
+            --name "yt-dld" ^
+            --windowed ^
+            --add-data "bin/ffmpeg-windows;bin/ffmpeg-windows" ^
+            --add-data "src/yt_dld;yt_dld" ^
+            --hidden-import yt_dlp ^
+            --hidden-import PySide6 ^
+            --collect-all yt_dlp ^
+            --noconfirm ^
+            --clean ^
             src/yt_dld/__main__.py
 
       - name: Package .exe
