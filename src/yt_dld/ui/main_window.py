@@ -19,6 +19,23 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_status()
 
+    def _setup_menu(self):
+        menubar = self.menuBar()
+
+        file_menu = menubar.addMenu(tr("menu_file"))
+        settings_action = QAction(tr("settings_tab"), self)
+        settings_action.triggered.connect(self.show_settings)
+        file_menu.addAction(settings_action)
+        file_menu.addSeparator()
+        exit_action = QAction(tr("menu_exit"), self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        help_menu = menubar.addMenu(tr("menu_help"))
+        about_action = QAction(tr("menu_about"), self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
     def _setup_ui(self):
         self._download_tab = DownloadTab(ffmpeg_path=self._ffmpeg_path, auth_opts=self._auth_opts)
         self.setCentralWidget(self._download_tab)
