@@ -29,12 +29,25 @@ jobs:
           unzip -o /tmp/ffprobe.zip -d bin/ffmpeg-macos/
           chmod +x bin/ffmpeg-macos/ffmpeg bin/ffmpeg-macos/ffprobe
 
+      - name: Download Deno (macOS)
+        run: |
+          mkdir -p bin/deno-macos
+          if [ "$(uname -m)" = "arm64" ]; then
+            DENO_TARGET="aarch64-apple-darwin"
+          else
+            DENO_TARGET="x86_64-apple-darwin"
+          fi
+          curl -SL "https://github.com/denoland/deno/releases/latest/download/deno-${DENO_TARGET}.zip" -o /tmp/deno.zip
+          unzip -o /tmp/deno.zip -d bin/deno-macos/
+          chmod +x bin/deno-macos/deno
+
       - name: Build .app
         run: |
           pyinstaller \
             --name "yt-dld" \
             --windowed \
             --add-data "bin/ffmpeg-macos:bin/ffmpeg-macos" \
+            --add-data "bin/deno-macos:bin/deno-macos" \
             --add-data "src/yt_dld:yt_dld" \
             --hidden-import yt_dlp \
             --hidden-import PySide6 \
@@ -80,12 +93,20 @@ jobs:
             copy "%%d\bin\ffprobe.exe" "bin\ffmpeg-windows\"
           )
 
+      - name: Download Deno (Windows)
+        run: |
+          mkdir bin\deno-windows
+          curl -SL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip" -o %TEMP%\deno.zip
+          powershell -Command "Expand-Archive -Force '%TEMP%\deno.zip' '%TEMP%\deno-extract'"
+          copy "%TEMP%\deno-extract\deno.exe" "bin\deno-windows\"
+
       - name: Build .exe
         run: |
           pyinstaller ^
             --name "yt-dld" ^
             --windowed ^
             --add-data "bin/ffmpeg-windows;bin/ffmpeg-windows" ^
+            --add-data "bin/deno-windows;bin/deno-windows" ^
             --add-data "src/yt_dld;yt_dld" ^
             --hidden-import yt_dlp ^
             --hidden-import PySide6 ^
@@ -147,12 +168,20 @@ jobs:
           cp /tmp/ffmpeg-*-amd64-static/ffprobe bin/ffmpeg-linux/
           chmod +x bin/ffmpeg-linux/ffmpeg bin/ffmpeg-linux/ffprobe
 
+      - name: Download Deno (Linux)
+        run: |
+          mkdir -p bin/deno-linux
+          curl -SL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o /tmp/deno.zip
+          unzip -o /tmp/deno.zip -d bin/deno-linux/
+          chmod +x bin/deno-linux/deno
+
       - name: Build binary
         run: |
           pyinstaller \
             --name "yt-dld" \
             --windowed \
             --add-data "bin/ffmpeg-linux:bin/ffmpeg-linux" \
+            --add-data "bin/deno-linux:bin/deno-linux" \
             --add-data "src/yt_dld:yt_dld" \
             --hidden-import yt_dlp \
             --hidden-import PySide6 \
