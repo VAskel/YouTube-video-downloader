@@ -3,8 +3,10 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QFileDialog, QCheckBox, QLabel, QGroupBox, QMessageBox, QStackedWidget,
+    QListWidget, QListWidgetItem,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
 
 from yt_dld.core.i18n import tr
 from yt_dld.core.format_fetcher import FormatFetcher
@@ -13,15 +15,21 @@ from yt_dld.ui.format_selector import FormatSelector
 from yt_dld.ui.playlist_selector import PlaylistSelector
 from yt_dld.ui.progress_widget import ProgressWidget
 from yt_dld.ui.error_dialog import ErrorDialog
+from yt_dld.ui.settings_dialog import load_settings, get_auth_opts
 
 
 class DownloadTab(QWidget):
+    queue_changed = Signal(int)
+
     def __init__(self, ffmpeg_path=None, auth_opts=None, parent=None):
         super().__init__(parent)
         self._ffmpeg_path = ffmpeg_path
         self._auth_opts = auth_opts or {}
         self._worker = None
         self._playlist_info = None
+        self._queue = []
+        self._current_task = None
+        self._queue_busy = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -71,9 +79,24 @@ class DownloadTab(QWidget):
 
         layout.addWidget(self._selector_stack, 1)
 
-        self._download_btn = QPushButton(tr("download"))
+        self._download_btn = QPushButton(tr("add_to_queue"))
         self._download_btn.clicked.connect(self._on_download)
         layout.addWidget(self._download_btn)
+
+        self._queue_group = QGroupBox(tr("queue_title"))
+        queue_layout = QVBoxLayout(self._queue_group)
+        self._queue_list = QListWidget()
+        self._queue_list.setMaximumHeight(100)
+        self._queue_list.setAlternatingRowColors(True)
+        queue_layout.addWidget(self._queue_list)
+        queue_btn_layout = QHBoxLayout()
+        self._clear_queue_btn = QPushButton(tr("queue_clear"))
+        self._clear_queue_btn.clicked.connect(self._clear_queue)
+        queue_btn_layout.addStretch()
+        queue_btn_layout.addWidget(self._clear_queue_btn)
+        queue_layout.addLayout(queue_btn_layout)
+        self._queue_group.setVisible(False)
+        layout.addWidget(self._queue_group)
 
         self._progress_widget = ProgressWidget()
         layout.addWidget(self._progress_widget)
@@ -126,14 +149,10 @@ class DownloadTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, tr("fetch_error_title"), f"{tr('error_download')}: {e}")
             self._progress_widget._append_log(f"[✕] {e}")
-            self._reset_buttons()
 
     def _do_download(self):
         url = self._url_input.text().strip()
         output_path = self._path_input.text().strip()
-        if not url:
-            QMessageBox.warning(self, tr("fetch_error_title"), tr("error_no_url"))
-            return
         if not self._playlist_info and not self._format_selector.has_formats():
             QMessageBox.information(self, tr("fetch_error_title"), tr("fetch_first"))
             return
@@ -149,34 +168,139 @@ class DownloadTab(QWidget):
             if not selected_urls:
                 QMessageBox.warning(self, tr("fetch_error_title"), tr("no_videos_selected"))
                 return
-            selected_urls_for_download = selected_urls
             per_video_settings = self._playlist_selector.get_settings()
-            self._playlist_selector.lock()
         else:
-            selected_urls_for_download = None
+            if not url:
+                QMessageBox.warning(self, tr("fetch_error_title"), tr("error_no_url"))
+                return
+            selected_urls = [url]
             per_video_settings = None
+            use_subfolder = False
 
         format_id = self._format_selector.selected_format_id()
+        playlist_title = self._playlist_info.get("title") if self._playlist_info else None
+
+        task = {
+            "url": url,
+            "output_path": output_path,
+            "selected_urls": selected_urls,
+            "per_video_settings": per_video_settings or {},
+            "format_id": format_id,
+            "playlist_subfolder": use_subfolder,
+            "playlist_title": playlist_title,
+            "status": "pending",
+        }
+
+        self._queue.append(task)
+        self._add_to_queue_list(task, len(self._queue) - 1)
+        self._queue_group.setVisible(True)
+        self.queue_changed.emit(len(self._queue))
+
+        video_count = len(selected_urls)
+        display_title = playlist_title or url
+        self._progress_widget._append_log(
+            f"[+] {tr('queue_added') % (display_title, video_count)}"
+        )
+
+        self._clear_form()
+
+        if not self._queue_busy:
+            self._process_next_task()
+        else:
+            self._update_queue_display()
+
+    def _clear_form(self):
+        self._url_input.clear()
+        self._format_selector.clear()
+        self._playlist_selector.clear()
+        self._playlist_info = None
+        self._playlist_cb.setVisible(False)
+        self._selector_stack.setCurrentWidget(self._format_selector)
+
+    def _add_to_queue_list(self, task, index):
+        title = task.get("playlist_title") or task.get("url", "")
+        count = len(task.get("selected_urls", []))
+        item = QListWidgetItem(f"{title}  ({count} video{'s' if count != 1 else ''})")
+        item.setData(Qt.ItemDataRole.UserRole, index)
+        item.setForeground(QBrush(QColor("#888")))
+        self._queue_list.addItem(item)
+
+    def _update_queue_display(self):
+        for i in range(self._queue_list.count()):
+            item = self._queue_list.item(i)
+            idx = item.data(Qt.ItemDataRole.UserRole)
+            if idx is not None and idx < len(self._queue):
+                task = self._queue[idx]
+                title = task.get("playlist_title") or task.get("url", "")
+                count = len(task.get("selected_urls", []))
+                if task["status"] == "active":
+                    item.setText(f"▶ {title}  ({count} videos)")
+                    item.setForeground(QBrush(QColor("#4CAF50")))
+                elif task["status"] == "done":
+                    item.setText(f"✓ {title}  ({count} videos)")
+                    item.setForeground(QBrush(QColor("#388E3C")))
+                elif task["status"] == "failed":
+                    item.setText(f"✕ {title}  ({count} videos)")
+                    item.setForeground(QBrush(QColor("#D32F2F")))
+                elif task["status"] == "cancelled":
+                    item.setText(f"⊘ {title}  ({count} videos)")
+                    item.setForeground(QBrush(QColor("#FF9800")))
+                else:
+                    item.setText(f"{title}  ({count} videos)")
+                    item.setForeground(QBrush(QColor("#888")))
+
+    def _process_next_task(self):
+        if not self._queue:
+            self._queue_busy = False
+            self._queue_group.setVisible(False)
+            self._reset_buttons()
+            self.queue_changed.emit(0)
+            return
+
+        self._queue_busy = True
+        self._current_task = None
+
+        pending = [t for t in self._queue if t["status"] == "pending"]
+        if not pending:
+            self._queue_busy = False
+            self._reset_buttons()
+            return
+
+        task = pending[0]
+        task["status"] = "active"
+        self._current_task = task
+        self._update_queue_display()
+
+        title = task.get("playlist_title") or task.get("url", "")
+        self._progress_widget.reset()
+        self._progress_widget._append_log(f"[▶] {tr('queue_downloading') % title}")
+
+        self._fetch_btn.setEnabled(False)
 
         self._worker = DownloadWorker(
-            url=url,
-            output_path=output_path,
-            format_id=format_id,
-            playlist_subfolder=use_subfolder,
+            url=task["url"],
+            output_path=task["output_path"],
+            format_id=task["format_id"],
+            playlist_subfolder=task["playlist_subfolder"],
             ffmpeg_path=self._ffmpeg_path,
-            selected_urls=selected_urls_for_download,
-            per_video_settings=per_video_settings,
+            selected_urls=task["selected_urls"],
+            per_video_settings=task["per_video_settings"],
             auth_opts=self._auth_opts,
+            playlist_title=task["playlist_title"],
+            auth_rebuilder=self._build_fresh_auth,
         )
         self._worker.progress.connect(self._progress_widget.update_progress)
         self._worker.item_error.connect(self._on_item_error)
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
 
-        self._progress_widget.reset()
-        self._fetch_btn.setEnabled(False)
         self._cancel_btn.setEnabled(True)
         self._worker.start()
+
+    def _build_fresh_auth(self):
+        settings = load_settings()
+        fresh = get_auth_opts(settings)
+        return fresh
 
     def _on_item_error(self, err):
         self._progress_widget._append_log(f"[✕] {err.get('title', '')}: {err.get('error', '')}")
@@ -187,28 +311,66 @@ class DownloadTab(QWidget):
             self._worker.quit()
             self._worker.wait(3000)
             self._progress_widget._append_log("[✕] Cancelled")
-        self._reset_buttons()
+
+        if self._current_task:
+            self._current_task["status"] = "cancelled"
+            self._current_task = None
+
+        self._update_queue_display()
+        self._cancel_btn.setEnabled(False)
+        self._queue_busy = False
+        self._process_next_task()
 
     def _on_finished(self, url, path, errors=None):
+        display_title = self._current_task.get("playlist_title") if self._current_task else url
+        total = len(self._current_task.get("selected_urls", [])) if self._current_task else 0
+
         if errors:
-            total = self._playlist_selector.selected_count() if self._playlist_info else 0
-            if not total:
-                total = len(errors)
             self._progress_widget._append_log(
                 f"[⚠] {tr('playlist_skip_unavailable') % len(errors)}"
             )
             dlg = ErrorDialog(errors, total, self)
             dlg.exec()
 
-        self._progress_widget._append_log(f"[✓] {tr('status_done')}: {path}")
-        self._reset_buttons()
+        if self._current_task:
+            self._current_task["status"] = "failed" if errors else "done"
+        self._current_task = None
+
+        self._progress_widget._append_log(f"[✓] {tr('queue_completed') % display_title}")
+        self._update_queue_display()
+
+        self._cancel_btn.setEnabled(False)
+        self._queue_busy = False
+        self._process_next_task()
 
     def _on_error(self, message):
         self._progress_widget._append_log(f"[✕] {message}")
-        QMessageBox.critical(self, tr("fetch_error_title"), f"{tr('error_download')}: {message}")
-        self._reset_buttons()
+        if self._current_task:
+            self._current_task["status"] = "failed"
+            title = self._current_task.get("playlist_title") or self._current_task.get("url", "")
+            QMessageBox.critical(self, tr("fetch_error_title"), f"{tr('error_download')}: {title}\n{message}")
+            self._current_task = None
+        self._update_queue_display()
+        self._cancel_btn.setEnabled(False)
+        self._queue_busy = False
+        self._process_next_task()
+
+    def _clear_queue(self):
+        pending = [t for t in self._queue if t["status"] == "pending"]
+        if pending:
+            reply = QMessageBox.question(
+                self, tr("queue_title"),
+                tr("queue_confirm_clear") % len(pending),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        self._queue.clear()
+        self._queue_list.clear()
+        self._queue_group.setVisible(False)
+        self.queue_changed.emit(0)
 
     def _reset_buttons(self):
         self._fetch_btn.setEnabled(True)
         self._cancel_btn.setEnabled(False)
-        self._playlist_selector.unlock()

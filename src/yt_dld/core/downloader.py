@@ -12,7 +12,7 @@ class DownloadWorker(QThread):
 
     def __init__(self, url, output_path, format_id=None, playlist_subfolder=False,
                  ffmpeg_path=None, selected_urls=None, per_video_settings=None,
-                 auth_opts=None, parent=None):
+                 auth_opts=None, playlist_title=None, auth_rebuilder=None, parent=None):
         super().__init__(parent)
         self.url = url
         self.output_path = output_path
@@ -22,6 +22,8 @@ class DownloadWorker(QThread):
         self.selected_urls = selected_urls or []
         self.per_video_settings = per_video_settings or {}
         self.auth_opts = auth_opts or {}
+        self.playlist_title = playlist_title
+        self.auth_rebuilder = auth_rebuilder
         self._cancelled = False
 
     def     cancel(self):
@@ -150,6 +152,10 @@ class DownloadWorker(QThread):
                 break
 
             opts = dict(base_opts)
+
+            if self.auth_rebuilder:
+                opts.update(self.auth_rebuilder())
+
             vsettings = self.per_video_settings.get(u, {})
 
             if vsettings.get("format"):
@@ -158,11 +164,24 @@ class DownloadWorker(QThread):
                 opts["format"] = self.format_id
 
             if vsettings.get("filename"):
+                out_dir = self.output_path
+                if self.playlist_subfolder and self.playlist_title:
+                    out_dir = os.path.join(self.output_path, self.playlist_title)
                 opts["outtmpl"] = os.path.join(
-                    self.output_path,
+                    out_dir,
                     vsettings["filename"] + ".%(ext)s",
                 )
+            elif self.playlist_title:
+                counter = f"{i + 1:02d}"
+                out_dir = self.output_path
+                if self.playlist_subfolder:
+                    out_dir = os.path.join(self.output_path, self.playlist_title)
+                opts["outtmpl"] = os.path.join(
+                    out_dir,
+                    f"{counter} - %(title)s.%(ext)s",
+                )
 
+            display_name = vsettings.get("filename") or f"#{i + 1}"
             self.progress.emit({
                 "status": "downloading",
                 "percent": 0,
@@ -170,7 +189,7 @@ class DownloadWorker(QThread):
                 "downloaded_bytes": 0,
                 "speed": 0,
                 "eta": 0,
-                "filename": vsettings.get("filename", u),
+                "filename": display_name,
                 "playlist_index": i + 1,
                 "playlist_count": total,
             })
@@ -179,7 +198,7 @@ class DownloadWorker(QThread):
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([u])
             except Exception as e:
-                err = {"url": u, "title": vsettings.get("filename", u), "error": str(e)}
+                err = {"url": u, "title": display_name, "error": str(e)}
                 errors.append(err)
                 self.item_error.emit(err)
 

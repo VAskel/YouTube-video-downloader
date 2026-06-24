@@ -38,12 +38,20 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
         self._download_tab = DownloadTab(ffmpeg_path=self._ffmpeg_path, auth_opts=self._auth_opts)
+        self._download_tab.queue_changed.connect(self._on_queue_changed)
         self.setCentralWidget(self._download_tab)
 
     def _setup_status(self):
         self._status = QStatusBar()
         self._status.showMessage(f"{tr('status_ready')}  |  yt-dlp {yt_dlp.version.__version__}")
         self.setStatusBar(self._status)
+
+    def _on_queue_changed(self, count):
+        yt_ver = yt_dlp.version.__version__
+        if count > 0:
+            self._status.showMessage(f"{tr('queue_pending') % count}  |  yt-dlp {yt_ver}")
+        else:
+            self._status.showMessage(f"{tr('status_ready')}  |  yt-dlp {yt_ver}")
 
     def _show_about(self):
         QMessageBox.about(self, tr("menu_about"), tr("about_text"))

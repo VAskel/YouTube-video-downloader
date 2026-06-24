@@ -89,6 +89,46 @@ STRINGS = {
         "ru": "Safari не поддерживается (блокировка sandbox на macOS). Используйте Chrome или Firefox.",
         "en": "Safari is not supported (sandbox restriction on macOS). Use Chrome or Firefox."
     },
+    "queue_title": {
+        "ru": "Очередь загрузок",
+        "en": "Download queue",
+    },
+    "queue_empty": {
+        "ru": "Очередь пуста",
+        "en": "Queue is empty",
+    },
+    "queue_pending": {
+        "ru": "В очереди: %d",
+        "en": "In queue: %d",
+    },
+    "queue_downloading": {
+        "ru": "Скачивается: %s",
+        "en": "Downloading: %s",
+    },
+    "queue_added": {
+        "ru": "Добавлено в очередь: %s (%d видео)",
+        "en": "Added to queue: %s (%d videos)",
+    },
+    "queue_clear": {
+        "ru": "Очистить очередь",
+        "en": "Clear queue",
+    },
+    "queue_remove": {
+        "ru": "Удалить",
+        "en": "Remove",
+    },
+    "queue_confirm_clear": {
+        "ru": "Очистить всю очередь (%d плейлистов)?",
+        "en": "Clear entire queue (%d playlists)?",
+    },
+    "queue_completed": {
+        "ru": "✓ %s завершён",
+        "en": "✓ %s completed",
+    },
+    "add_to_queue": {
+        "ru": "В очередь",
+        "en": "Add to queue",
+    },
 }
 
 
