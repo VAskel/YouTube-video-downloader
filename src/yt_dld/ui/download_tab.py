@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 
 from yt_dld.core.i18n import tr
+from yt_dld.core.download_queue import DownloadQueue, DownloadQueueTask, TaskStatus
 from yt_dld.core.format_fetcher import FormatFetcher
 from yt_dld.core.downloader import DownloadWorker
 from yt_dld.ui.format_selector import FormatSelector
@@ -27,7 +28,7 @@ class DownloadTab(QWidget):
         self._auth_opts = auth_opts or {}
         self._worker = None
         self._playlist_info = None
-        self._queue = []
+        self._queue = DownloadQueue()
         self._current_task = None
         self._queue_busy = False
         self._setup_ui()
@@ -185,26 +186,24 @@ class DownloadTab(QWidget):
         format_id = self._format_selector.selected_format_id()
         playlist_title = self._playlist_info.get("title") if self._playlist_info else None
 
-        task = {
-            "url": url,
-            "output_path": output_path,
-            "selected_urls": selected_urls,
-            "per_video_settings": per_video_settings or {},
-            "format_id": format_id,
-            "playlist_subfolder": use_subfolder,
-            "playlist_title": playlist_title,
-            "status": "pending",
-        }
+        task = DownloadQueueTask(
+            url=url,
+            output_path=output_path,
+            selected_urls=selected_urls,
+            per_video_settings=per_video_settings or {},
+            format_id=format_id,
+            playlist_subfolder=use_subfolder,
+            playlist_title=playlist_title,
+        )
 
-        self._queue.append(task)
-        self._add_to_queue_list(task, len(self._queue) - 1)
+        task_index = self._queue.add(task)
+        self._add_to_queue_list(task, task_index)
         self._queue_group.setVisible(True)
         self.queue_changed.emit(len(self._queue))
 
         video_count = len(selected_urls)
-        display_title = playlist_title or url
         self._progress_widget._append_log(
-            f"[+] {tr('queue_added') % (display_title, video_count)}"
+            f"[+] {tr('queue_added') % (task.title, video_count)}"
         )
 
         self._clear_form()
@@ -223,8 +222,8 @@ class DownloadTab(QWidget):
         self._selector_stack.setCurrentWidget(self._format_selector)
 
     def _add_to_queue_list(self, task, index):
-        title = task.get("playlist_title") or task.get("url", "")
-        count = len(task.get("selected_urls", []))
+        title = task.title
+        count = task.video_count
         item = QListWidgetItem(f"{title}  ({count} video{'s' if count != 1 else ''})")
         item.setData(Qt.ItemDataRole.UserRole, index)
         item.setForeground(QBrush(QColor("#888")))
@@ -236,18 +235,18 @@ class DownloadTab(QWidget):
             idx = item.data(Qt.ItemDataRole.UserRole)
             if idx is not None and idx < len(self._queue):
                 task = self._queue[idx]
-                title = task.get("playlist_title") or task.get("url", "")
-                count = len(task.get("selected_urls", []))
-                if task["status"] == "active":
+                title = task.title
+                count = task.video_count
+                if task.status == TaskStatus.ACTIVE:
                     item.setText(f"▶ {title}  ({count} videos)")
                     item.setForeground(QBrush(QColor("#4CAF50")))
-                elif task["status"] == "done":
+                elif task.status == TaskStatus.DONE:
                     item.setText(f"✓ {title}  ({count} videos)")
                     item.setForeground(QBrush(QColor("#388E3C")))
-                elif task["status"] == "failed":
+                elif task.status == TaskStatus.FAILED:
                     item.setText(f"✕ {title}  ({count} videos)")
                     item.setForeground(QBrush(QColor("#D32F2F")))
-                elif task["status"] == "cancelled":
+                elif task.status == TaskStatus.CANCELLED:
                     item.setText(f"⊘ {title}  ({count} videos)")
                     item.setForeground(QBrush(QColor("#FF9800")))
                 else:
@@ -265,31 +264,30 @@ class DownloadTab(QWidget):
         self._queue_busy = True
         self._current_task = None
 
-        pending = [t for t in self._queue if t["status"] == "pending"]
-        if not pending:
+        task = self._queue.next_pending()
+        if not task:
             self._queue_busy = False
             self._reset_buttons()
             return
 
-        task = pending[0]
-        task["status"] = "active"
+        task.status = TaskStatus.ACTIVE
         self._current_task = task
         self._update_queue_display()
 
-        title = task.get("playlist_title") or task.get("url", "")
+        title = task.title
         self._progress_widget.reset()
         self._progress_widget._append_log(f"[▶] {tr('queue_downloading') % title}")
 
         self._worker = DownloadWorker(
-            url=task["url"],
-            output_path=task["output_path"],
-            format_id=task["format_id"],
-            playlist_subfolder=task["playlist_subfolder"],
+            url=task.url,
+            output_path=task.output_path,
+            format_id=task.format_id,
+            playlist_subfolder=task.playlist_subfolder,
             ffmpeg_path=self._ffmpeg_path,
-            selected_urls=task["selected_urls"],
-            per_video_settings=task["per_video_settings"],
+            selected_urls=task.selected_urls,
+            per_video_settings=task.per_video_settings,
             auth_opts=self._auth_opts,
-            playlist_title=task["playlist_title"],
+            playlist_title=task.playlist_title,
             auth_rebuilder=self._build_fresh_auth,
         )
         self._worker.progress.connect(self._progress_widget.update_progress)
@@ -318,7 +316,7 @@ class DownloadTab(QWidget):
             self._progress_widget._append_log("[✕] Cancelled")
 
         if self._current_task:
-            self._current_task["status"] = "cancelled"
+            self._current_task.status = TaskStatus.CANCELLED
             self._current_task = None
 
         self._update_queue_display()
@@ -334,12 +332,10 @@ class DownloadTab(QWidget):
             self._worker.wait(3000)
 
         if self._current_task:
-            self._current_task["status"] = "cancelled"
+            self._current_task.status = TaskStatus.CANCELLED
             self._current_task = None
 
-        for t in self._queue:
-            if t["status"] == "pending":
-                t["status"] = "cancelled"
+        self._queue.cancel_pending()
 
         self._progress_widget._append_log("[⊘] Stopped — queue cleared")
         self._cleanup_queue()
@@ -347,8 +343,8 @@ class DownloadTab(QWidget):
         self._reset_buttons()
 
     def _on_finished(self, url, path, errors=None):
-        display_title = self._current_task.get("playlist_title") if self._current_task else url
-        total = len(self._current_task.get("selected_urls", [])) if self._current_task else 0
+        display_title = self._current_task.title if self._current_task else url
+        total = self._current_task.video_count if self._current_task else 0
 
         if errors:
             self._progress_widget._append_log(
@@ -358,7 +354,7 @@ class DownloadTab(QWidget):
             dlg.exec()
 
         if self._current_task:
-            self._current_task["status"] = "failed" if errors else "done"
+            self._current_task.status = TaskStatus.FAILED if errors else TaskStatus.DONE
         self._current_task = None
 
         self._progress_widget._append_log(f"[✓] {tr('queue_completed') % display_title}")
@@ -371,8 +367,8 @@ class DownloadTab(QWidget):
     def _on_error(self, message):
         self._progress_widget._append_log(f"[✕] {message}")
         if self._current_task:
-            self._current_task["status"] = "failed"
-            title = self._current_task.get("playlist_title") or self._current_task.get("url", "")
+            self._current_task.status = TaskStatus.FAILED
+            title = self._current_task.title
             QMessageBox.critical(self, tr("fetch_error_title"), f"{tr('error_download')}: {title}\n{message}")
             self._current_task = None
         self._update_queue_display()
@@ -381,7 +377,7 @@ class DownloadTab(QWidget):
         self._process_next_task()
 
     def _clear_queue(self):
-        pending = [t for t in self._queue if t["status"] == "pending"]
+        pending = self._queue.pending()
         if pending:
             reply = QMessageBox.question(
                 self, tr("queue_title"),
@@ -397,7 +393,7 @@ class DownloadTab(QWidget):
         self.queue_changed.emit(0)
 
     def _cleanup_queue(self):
-        self._queue = [t for t in self._queue if t["status"] != "cancelled"]
+        self._queue.remove_cancelled()
         self._queue_list.clear()
         for i, t in enumerate(self._queue):
             self._add_to_queue_list(t, i)

@@ -1,25 +1,10 @@
 import os
-import glob
 
 from PySide6.QtCore import QThread, Signal
 import yt_dlp
 
-
-class _YtLogger:
-    def __init__(self, callback):
-        self._cb = callback
-
-    def debug(self, msg):
-        pass
-
-    def info(self, msg):
-        pass
-
-    def warning(self, msg):
-        self._cb(f"[yt-dlp] {msg}")
-
-    def error(self, msg):
-        self._cb(f"[yt-dlp] {msg}")
+from yt_dld.core.playlist_downloader import PlaylistDownloader
+from yt_dld.core.video_downloader import DownloadCancelled, VideoDownloader, VideoDownloadSpec
 
 
 class DownloadWorker(QThread):
@@ -72,7 +57,7 @@ class DownloadWorker(QThread):
 
     def _progress_hook(self, d):
         if self._cancelled:
-            raise Exception("Cancelled")
+            raise DownloadCancelled("Cancelled")
 
         if d["status"] == "downloading":
             total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
@@ -124,6 +109,7 @@ class DownloadWorker(QThread):
             "no_warnings": True,
             "merge_output_format": "mp4",
             "ignoreerrors": True,
+            "overwrites": False,
             "continuedl": True,
             "fragment_retries": 30,
             "retries": 10,
@@ -149,46 +135,6 @@ class DownloadWorker(QThread):
 
         return opts
 
-    def _download_one(self, opts, url, expected_dir, display_name):
-        for attempt in range(1, 4):
-            if self._cancelled:
-                raise Exception("Cancelled")
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    ydl.download([url])
-
-                if self._verify_output(expected_dir, display_name):
-                    return
-                err_msg = "Output file not found — leftover .part files detected"
-            except Exception as e:
-                err_msg = str(e)
-
-            if attempt < 3 and not self._cancelled:
-                self.yt_log.emit(f"[↻] {display_name}: retry {attempt + 1}/3 — {err_msg[:80]}")
-                continue
-            raise Exception(err_msg)
-
-    def _verify_output(self, out_dir, display_name):
-        mp4_files = glob.glob(os.path.join(out_dir, "*.mp4"))
-        part_files = glob.glob(os.path.join(out_dir, "*.part"))
-        ytdl_files = glob.glob(os.path.join(out_dir, "*.ytdl"))
-        tmp_files = part_files + ytdl_files
-
-        newest_mp4 = None
-        if mp4_files:
-            newest_mp4 = max(mp4_files, key=os.path.getmtime)
-
-        if newest_mp4 and os.path.getsize(newest_mp4) > 0:
-            return True
-
-        if tmp_files:
-            names = [os.path.basename(f) for f in tmp_files[:5]]
-            suffix = f" +{len(tmp_files) - 5} more" if len(tmp_files) > 5 else ""
-            self.yt_log.emit(
-                f"[!] {display_name}: {len(tmp_files)} leftover file(s): {', '.join(names)}{suffix}"
-            )
-        return False
-
     def run(self):
         errors = []
         try:
@@ -204,33 +150,47 @@ class DownloadWorker(QThread):
                 self.error.emit(str(e))
 
     def _download_selected(self):
-        base_opts = self._build_opts({"noplaylist": True})
-        errors = []
-        total = len(self.selected_urls)
+        base_opts = self._build_opts({"noplaylist": True, "ignoreerrors": False})
+        video_downloader = VideoDownloader(
+            base_opts,
+            log_callback=lambda msg: self.yt_log.emit(msg),
+            auth_rebuilder=self.auth_rebuilder,
+            cancel_checker=lambda: self._cancelled,
+        )
+        playlist_downloader = PlaylistDownloader(
+            video_downloader,
+            item_start_callback=self._emit_item_started,
+            item_error_callback=lambda err: self.item_error.emit({
+                "url": err.url,
+                "title": err.title,
+                "error": err.error,
+            }),
+            cancel_checker=lambda: self._cancelled,
+        )
+        errors = playlist_downloader.download(self._build_video_specs())
+        return [
+            {"url": err.url, "title": err.title, "error": err.error}
+            for err in errors
+        ]
 
-        for i, u in enumerate(self.selected_urls):
-            if self._cancelled:
-                break
-
-            opts = dict(base_opts)
-            opts["logger"] = _YtLogger(lambda msg: self.yt_log.emit(msg))
-
-            if self.auth_rebuilder:
-                opts.update(self.auth_rebuilder())
-
-            vsettings = self.per_video_settings.get(u, {})
+    def _build_video_specs(self):
+        specs = []
+        for i, url in enumerate(self.selected_urls):
+            vsettings = self.per_video_settings.get(url, {})
+            item_format_id = None
 
             if vsettings.get("format"):
-                opts["format"] = vsettings["format"]
+                item_format_id = vsettings["format"]
             elif self.format_id and self.format_id != "best":
-                opts["format"] = self.format_id
+                item_format_id = self.format_id
 
             expected_dir = self.output_path
+            outtmpl = None
 
             if vsettings.get("filename"):
                 if self.playlist_subfolder and self.playlist_title:
                     expected_dir = os.path.join(self.output_path, self.playlist_title)
-                opts["outtmpl"] = os.path.join(
+                outtmpl = os.path.join(
                     expected_dir,
                     vsettings["filename"] + ".%(ext)s",
                 )
@@ -238,32 +198,37 @@ class DownloadWorker(QThread):
                 if self.playlist_subfolder:
                     expected_dir = os.path.join(self.output_path, self.playlist_title)
                 counter = f"{i + 1:02d}"
-                opts["outtmpl"] = os.path.join(
+                outtmpl = os.path.join(
                     expected_dir,
                     f"{counter} - %(title)s.%(ext)s",
                 )
 
             display_name = vsettings.get("filename") or f"#{i + 1}"
-            self.progress.emit({
-                "status": "downloading",
-                "percent": 0,
-                "total_bytes": 0,
-                "downloaded_bytes": 0,
-                "speed": 0,
-                "eta": 0,
-                "filename": display_name,
-                "playlist_index": i + 1,
-                "playlist_count": total,
-            })
 
-            try:
-                self._download_one(opts, u, expected_dir, display_name)
-            except Exception as e:
-                err = {"url": u, "title": display_name, "error": str(e)}
-                errors.append(err)
-                self.item_error.emit(err)
+            specs.append(
+                VideoDownloadSpec(
+                    url=url,
+                    expected_dir=expected_dir,
+                    display_name=display_name,
+                    outtmpl=outtmpl,
+                    format_id=item_format_id,
+                )
+            )
 
-        return errors
+        return specs
+
+    def _emit_item_started(self, spec, index, total):
+        self.progress.emit({
+            "status": "downloading",
+            "percent": 0,
+            "total_bytes": 0,
+            "downloaded_bytes": 0,
+            "speed": 0,
+            "eta": 0,
+            "filename": spec.display_name,
+            "playlist_index": index,
+            "playlist_count": total,
+        })
 
     def _download_playlist(self):
         opts = self._build_opts({"noplaylist": False})
