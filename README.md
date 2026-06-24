@@ -12,6 +12,7 @@ A cross-platform desktop UI wrapper for [yt-dlp](https://github.com/yt-dlp/yt-dl
 - **Error dialog** — after download, shows which videos failed and why, with one-click copy
 - **Real-time progress** — speed, ETA, per-video playlist progress (X of Y)
 - **Bundled FFmpeg** — no external dependencies; everything ships inside the app
+- **Bundled Deno** — provides a JavaScript runtime for yt-dlp YouTube challenge solving
 - **Cross-platform** — macOS, Windows, Linux
 - **i18n** — Russian and English, auto-detected from system locale
 
@@ -107,6 +108,7 @@ Settings are stored in `~/.yt_dld/settings.json`:
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube/video extraction and downloading |
 | [PySide6](https://pypi.org/project/PySide6/) | Qt for Python GUI framework (LGPL) |
 | [FFmpeg](https://ffmpeg.org/) | Audio/video processing (bundled as static binaries) |
+| [Deno](https://deno.com/) | JavaScript runtime for YouTube challenge solving (bundled) |
 
 ## Project structure
 
@@ -117,6 +119,7 @@ YouTube-video-downloader/
 │   ├── main.py                  # App bootstrap, FFmpeg init
 │   ├── core/
 │   │   ├── downloader.py        # yt-dlp wrapper (QThread + per-video settings)
+│   │   ├── deno_manager.py      # Auto-detection of bundled/system Deno
 │   │   ├── ffmpeg_manager.py    # Auto-detection of bundled FFmpeg
 │   │   ├── format_fetcher.py    # Format+playlist listing, hidden video detection
 │   │   └── i18n.py              # RU/EN translations
@@ -129,7 +132,7 @@ YouTube-video-downloader/
 │       ├── error_dialog.py      # Post-download error summary with copy
 │       ├── progress_widget.py   # Progress bar, speed, ETA, deduplicated log
 │       └── settings_dialog.py   # App settings (language, path, ffmpeg)
-├── bin/                         # Bundled FFmpeg binaries (per platform)
+├── bin/                         # Bundled FFmpeg and Deno binaries (per platform)
 ├── scripts/                     # PyInstaller build scripts
 ├── tests/                       # pytest unit tests
 └── pyproject.toml

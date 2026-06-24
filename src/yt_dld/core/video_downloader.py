@@ -10,6 +10,15 @@ class DownloadCancelled(Exception):
     pass
 
 
+NON_RETRYABLE_ERRORS = (
+    "Requested format is not available",
+    "Only images are available for download",
+    "Unsupported URL",
+    "Private video",
+    "This video is unavailable",
+)
+
+
 class YtLogger:
     def __init__(self, callback: Callable[[str], None]):
         self._cb = callback
@@ -63,6 +72,9 @@ class VideoDownloader:
                 with self.ydl_cls(opts) as ydl:
                     ydl.download([spec.url])
 
+                if self.cancel_checker():
+                    raise DownloadCancelled("Cancelled")
+
                 if self._verify_output(spec.expected_dir, spec.display_name):
                     return
                 err_msg = "Output file not found - leftover .part files detected"
@@ -71,8 +83,11 @@ class VideoDownloader:
             except Exception as e:
                 err_msg = str(e)
 
+            if self._is_non_retryable(err_msg):
+                raise Exception(err_msg)
+
             if attempt < self.max_attempts and not self.cancel_checker():
-                self.log_callback(
+                self._log(
                     f"[↻] {spec.display_name}: retry {attempt + 1}/{self.max_attempts} - {err_msg[:80]}"
                 )
                 continue
@@ -80,7 +95,7 @@ class VideoDownloader:
 
     def _build_opts(self, spec: VideoDownloadSpec):
         opts = dict(self.base_opts)
-        opts["logger"] = YtLogger(self.log_callback)
+        opts["logger"] = YtLogger(self._log)
 
         if self.auth_rebuilder:
             opts.update(self.auth_rebuilder())
@@ -92,6 +107,13 @@ class VideoDownloader:
             opts["outtmpl"] = spec.outtmpl
 
         return opts
+
+    def _log(self, msg):
+        if not self.cancel_checker():
+            self.log_callback(msg)
+
+    def _is_non_retryable(self, err_msg):
+        return any(marker in err_msg for marker in NON_RETRYABLE_ERRORS)
 
     def _verify_output(self, out_dir, display_name):
         mp4_files = glob.glob(os.path.join(out_dir, "*.mp4"))
@@ -109,7 +131,7 @@ class VideoDownloader:
         if tmp_files:
             names = [os.path.basename(f) for f in tmp_files[:5]]
             suffix = f" +{len(tmp_files) - 5} more" if len(tmp_files) > 5 else ""
-            self.log_callback(
+            self._log(
                 f"[!] {display_name}: {len(tmp_files)} leftover file(s): {', '.join(names)}{suffix}"
             )
         return False

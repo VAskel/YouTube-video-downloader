@@ -6,8 +6,8 @@ BIN_DIR="$(cd "$(dirname "$0")/.." && pwd)/bin"
 DIST_DIR="$(cd "$(dirname "$0")/.." && pwd)/dist"
 BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)/build"
 
-# Ensure ffmpeg binaries exist for all platforms
-mkdir -p "$BIN_DIR/ffmpeg-macos" "$BIN_DIR/ffmpeg-windows" "$BIN_DIR/ffmpeg-linux"
+# Ensure bundled binaries directories exist
+mkdir -p "$BIN_DIR/ffmpeg-macos" "$BIN_DIR/ffmpeg-windows" "$BIN_DIR/ffmpeg-linux" "$BIN_DIR/deno-macos"
 
 # Download macOS ffmpeg if not present
 if [ ! -f "$BIN_DIR/ffmpeg-macos/ffmpeg" ]; then
@@ -48,12 +48,27 @@ fi
 
 echo "All ffmpeg binaries ready."
 
+# Download macOS Deno if not present
+if [ ! -f "$BIN_DIR/deno-macos/deno" ]; then
+    echo "Downloading Deno for macOS..."
+    if [ "$(uname -m)" = "arm64" ]; then
+        DENO_TARGET="aarch64-apple-darwin"
+    else
+        DENO_TARGET="x86_64-apple-darwin"
+    fi
+    curl -SL "https://github.com/denoland/deno/releases/latest/download/deno-${DENO_TARGET}.zip" -o /tmp/deno-macos.zip
+    unzip -o /tmp/deno-macos.zip -d "$BIN_DIR/deno-macos/"
+    rm /tmp/deno-macos.zip
+    chmod +x "$BIN_DIR/deno-macos/deno"
+fi
+
 # Build macOS .app
 pyinstaller \
     --name "$APP_NAME" \
     --windowed \
     --icon=src/yt_dld/resources/icons/app.icns \
     --add-data "bin/ffmpeg-macos:bin/ffmpeg-macos" \
+    --add-data "bin/deno-macos:bin/deno-macos" \
     --add-data "src/yt_dld:yt_dld" \
     --hidden-import yt_dlp \
     --hidden-import PySide6 \

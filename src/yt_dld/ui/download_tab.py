@@ -22,9 +22,10 @@ from yt_dld.ui.settings_dialog import load_settings, get_auth_opts
 class DownloadTab(QWidget):
     queue_changed = Signal(int)
 
-    def __init__(self, ffmpeg_path=None, auth_opts=None, parent=None):
+    def __init__(self, ffmpeg_path=None, deno_path=None, auth_opts=None, parent=None):
         super().__init__(parent)
         self._ffmpeg_path = ffmpeg_path
+        self._deno_path = deno_path
         self._auth_opts = auth_opts or {}
         self._worker = None
         self._playlist_info = None
@@ -284,6 +285,7 @@ class DownloadTab(QWidget):
             format_id=task.format_id,
             playlist_subfolder=task.playlist_subfolder,
             ffmpeg_path=self._ffmpeg_path,
+            deno_path=self._deno_path,
             selected_urls=task.selected_urls,
             per_video_settings=task.per_video_settings,
             auth_opts=self._auth_opts,

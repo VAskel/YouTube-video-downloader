@@ -3,9 +3,11 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from yt_dld.core.deno_manager import find_deno, _platform_dir as _deno_platform_dir
 from yt_dld.core.ffmpeg_manager import find_ffmpeg, _platform_dir
 from yt_dld.core.download_queue import DownloadQueue, DownloadQueueTask, TaskStatus
 from yt_dld.core.playlist_downloader import PlaylistDownloader
@@ -21,6 +23,32 @@ class TestFfmpegManager(unittest.TestCase):
         ffmpeg, ffprobe = find_ffmpeg()
         self.assertTrue(os.path.isfile(ffmpeg))
         self.assertTrue(os.path.isfile(ffprobe))
+
+
+class TestDenoManager(unittest.TestCase):
+    def test_platform_dir(self):
+        d = _deno_platform_dir()
+        self.assertIn(d, ("deno-macos", "deno-windows", "deno-linux"))
+
+    @patch("yt_dld.core.deno_manager.shutil.which")
+    @patch("yt_dld.core.deno_manager.os.path.isfile")
+    def test_find_deno_prefers_bundled_binary(self, isfile, which):
+        isfile.return_value = True
+
+        deno = find_deno()
+
+        self.assertIn("bin", deno)
+        self.assertIn("deno", os.path.basename(deno))
+        which.assert_not_called()
+
+    @patch("yt_dld.core.deno_manager.shutil.which")
+    @patch("yt_dld.core.deno_manager.os.path.isfile")
+    def test_find_deno_falls_back_to_system_binary(self, isfile, which):
+        isfile.return_value = False
+        which.return_value = "/usr/local/bin/deno"
+
+        self.assertEqual(find_deno(), "/usr/local/bin/deno")
+        which.assert_called_once_with("deno")
 
 
 class TestFormatFetcher(unittest.TestCase):
@@ -116,6 +144,78 @@ class TestVideoDownloader(unittest.TestCase):
 
         self.assertEqual(len(calls), 2)
         self.assertTrue(any("retry 2/3" in log for log in logs))
+
+    def test_download_does_not_retry_unavailable_format(self):
+        calls = []
+        logs = []
+
+        class FakeYDL:
+            def __init__(self, opts):
+                self.opts = opts
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def download(self, urls):
+                calls.append(urls)
+                raise Exception("Requested format is not available")
+
+        downloader = VideoDownloader(
+            {},
+            log_callback=logs.append,
+            ydl_cls=FakeYDL,
+        )
+
+        with self.assertRaisesRegex(Exception, "Requested format is not available"):
+            downloader.download(
+                VideoDownloadSpec(
+                    url="https://example.test/video",
+                    expected_dir="/tmp",
+                    display_name="Video",
+                )
+            )
+
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(any("retry" in log for log in logs))
+
+    def test_download_suppresses_logs_after_cancel(self):
+        logs = []
+        cancelled = {"value": False}
+
+        class FakeYDL:
+            def __init__(self, opts):
+                self.opts = opts
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def download(self, urls):
+                cancelled["value"] = True
+                self.opts["logger"].warning("late warning")
+
+        downloader = VideoDownloader(
+            {},
+            log_callback=logs.append,
+            cancel_checker=lambda: cancelled["value"],
+            ydl_cls=FakeYDL,
+        )
+
+        with self.assertRaises(DownloadCancelled):
+            downloader.download(
+                VideoDownloadSpec(
+                    url="https://example.test/video",
+                    expected_dir="/tmp",
+                    display_name="Video",
+                )
+            )
+
+        self.assertEqual(logs, [])
 
     def test_download_respects_cancel_before_start(self):
         calls = []

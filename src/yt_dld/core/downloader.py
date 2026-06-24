@@ -15,7 +15,7 @@ class DownloadWorker(QThread):
     yt_log = Signal(str)
 
     def __init__(self, url, output_path, format_id=None, playlist_subfolder=False,
-                 ffmpeg_path=None, selected_urls=None, per_video_settings=None,
+                 ffmpeg_path=None, deno_path=None, selected_urls=None, per_video_settings=None,
                  auth_opts=None, playlist_title=None, auth_rebuilder=None, parent=None):
         super().__init__(parent)
         self.url = url
@@ -23,6 +23,7 @@ class DownloadWorker(QThread):
         self.format_id = format_id
         self.playlist_subfolder = playlist_subfolder
         self.ffmpeg_path = ffmpeg_path
+        self.deno_path = deno_path
         self.selected_urls = selected_urls or []
         self.per_video_settings = per_video_settings or {}
         self.auth_opts = auth_opts or {}
@@ -115,6 +116,8 @@ class DownloadWorker(QThread):
             "retries": 10,
             "retry_sleep_fragment": 3,
             "concurrent_fragment_downloads": 1,
+            "remote_components": ["ejs:github"],
+            "js_runtimes": self._build_js_runtimes(),
             "progress_hooks": [self._progress_hook],
             "postprocessor_hooks": [self._postprocess_hook],
         }
@@ -134,6 +137,15 @@ class DownloadWorker(QThread):
             opts.update(extra)
 
         return opts
+
+    def _build_js_runtimes(self):
+        deno_config = {"path": self.deno_path} if self.deno_path else {}
+        return {
+            "deno": deno_config,
+            "node": {},
+            "bun": {},
+            "quickjs": {},
+        }
 
     def run(self):
         errors = []

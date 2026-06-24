@@ -9,9 +9,10 @@ from yt_dld.ui.settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, ffmpeg_path=None, auth_opts=None):
+    def __init__(self, ffmpeg_path=None, deno_path=None, auth_opts=None):
         super().__init__()
         self._ffmpeg_path = ffmpeg_path
+        self._deno_path = deno_path
         self._auth_opts = auth_opts or {}
         self.setWindowTitle(tr("app_title"))
         self.resize(800, 700)
@@ -37,7 +38,11 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     def _setup_ui(self):
-        self._download_tab = DownloadTab(ffmpeg_path=self._ffmpeg_path, auth_opts=self._auth_opts)
+        self._download_tab = DownloadTab(
+            ffmpeg_path=self._ffmpeg_path,
+            deno_path=self._deno_path,
+            auth_opts=self._auth_opts,
+        )
         self._download_tab.queue_changed.connect(self._on_queue_changed)
         self.setCentralWidget(self._download_tab)
 
