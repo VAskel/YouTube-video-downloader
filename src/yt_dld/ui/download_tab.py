@@ -32,6 +32,7 @@ class DownloadTab(QWidget):
         self._queue = DownloadQueue()
         self._current_task = None
         self._queue_busy = False
+        self._error_dialogs = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -352,8 +353,7 @@ class DownloadTab(QWidget):
             self._progress_widget._append_log(
                 f"[⚠] {tr('playlist_skip_unavailable') % len(errors)}"
             )
-            dlg = ErrorDialog(errors, total, self)
-            dlg.exec()
+            self._show_error_dialog(errors, total)
 
         if self._current_task:
             self._current_task.status = TaskStatus.FAILED if errors else TaskStatus.DONE
@@ -365,6 +365,17 @@ class DownloadTab(QWidget):
         self._cancel_btn.setEnabled(False)
         self._queue_busy = False
         self._process_next_task()
+
+    def _show_error_dialog(self, errors, total):
+        dlg = ErrorDialog(errors, total, self)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._error_dialogs.append(dlg)
+        dlg.finished.connect(lambda _result, dialog=dlg: self._forget_error_dialog(dialog))
+        dlg.show()
+
+    def _forget_error_dialog(self, dialog):
+        if dialog in self._error_dialogs:
+            self._error_dialogs.remove(dialog)
 
     def _on_error(self, message):
         self._progress_widget._append_log(f"[✕] {message}")
