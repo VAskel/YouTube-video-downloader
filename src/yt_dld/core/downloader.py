@@ -30,9 +30,6 @@ class DownloadWorker(QThread):
         self._cancelled = True
 
     def _postprocess_hook(self, d):
-        if self._cancelled:
-            raise Exception("Cancelled")
-
         status = d.get("status", "")
         postprocessor = d.get("postprocessor", "")
         filename = d.get("info_dict", {}).get("filepath", "") or d.get("filename", "")
@@ -115,7 +112,7 @@ class DownloadWorker(QThread):
         if self.format_id and self.format_id != "best":
             opts["format"] = self.format_id
         else:
-            opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            opts["format"] = "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
 
         if self.ffmpeg_path:
             opts["ffmpeg_location"] = os.path.dirname(self.ffmpeg_path)
