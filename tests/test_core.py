@@ -8,10 +8,12 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from yt_dld.core.deno_manager import find_deno, _platform_dir as _deno_platform_dir
+from yt_dld.core.downloader import DownloadWorker
 from yt_dld.core.ffmpeg_manager import find_ffmpeg, _platform_dir
 from yt_dld.core.download_queue import DownloadQueue, DownloadQueueTask, TaskStatus
 from yt_dld.core.playlist_downloader import PlaylistDownloader
 from yt_dld.core.video_downloader import DownloadCancelled, VideoDownloader, VideoDownloadSpec
+from yt_dld.ui.settings_dialog import get_fragment_concurrency
 
 
 class TestFfmpegManager(unittest.TestCase):
@@ -49,6 +51,18 @@ class TestDenoManager(unittest.TestCase):
 
         self.assertEqual(find_deno(), "/usr/local/bin/deno")
         which.assert_called_once_with("deno")
+
+
+class TestDownloadSettings(unittest.TestCase):
+    def test_fragment_concurrency_defaults_to_balanced(self):
+        self.assertEqual(get_fragment_concurrency({}), 2)
+        self.assertEqual(get_fragment_concurrency({"fragment_concurrency": "bad"}), 2)
+        self.assertEqual(get_fragment_concurrency({"fragment_concurrency": 99}), 2)
+
+    def test_fragment_concurrency_accepts_supported_values(self):
+        self.assertEqual(get_fragment_concurrency({"fragment_concurrency": 1}), 1)
+        self.assertEqual(get_fragment_concurrency({"fragment_concurrency": "2"}), 2)
+        self.assertEqual(get_fragment_concurrency({"fragment_concurrency": 4}), 4)
 
 
 class TestFormatFetcher(unittest.TestCase):
@@ -360,6 +374,19 @@ class TestDownloadQueue(unittest.TestCase):
         queue.remove_cancelled()
 
         self.assertEqual(list(queue), [active])
+
+
+class TestDownloadWorkerOptions(unittest.TestCase):
+    def test_build_opts_uses_fragment_concurrency(self):
+        worker = DownloadWorker(
+            url="https://example.test/video",
+            output_path="/tmp",
+            fragment_concurrency=1,
+        )
+
+        opts = worker._build_opts()
+
+        self.assertEqual(opts["concurrent_fragment_downloads"], 1)
 
 
 class TestI18n(unittest.TestCase):

@@ -23,6 +23,8 @@ BROWSERS = [
     ("vivaldi", "Vivaldi"),
 ]
 
+DEFAULT_FRAGMENT_CONCURRENCY = 2
+
 
 def load_settings():
     try:
@@ -56,6 +58,15 @@ def get_auth_opts(settings):
             opts["username"] = username
             opts["password"] = password
     return opts
+
+
+def get_fragment_concurrency(settings):
+    value = settings.get("fragment_concurrency", DEFAULT_FRAGMENT_CONCURRENCY)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_FRAGMENT_CONCURRENCY
+    return value if value in {1, 2, 4} else DEFAULT_FRAGMENT_CONCURRENCY
 
 
 class SettingsDialog(QDialog):
@@ -93,6 +104,16 @@ class SettingsDialog(QDialog):
         browse_ffmpeg.clicked.connect(self._browse_ffmpeg)
         ffmpeg_layout.addWidget(browse_ffmpeg)
         form.addRow(tr("settings_ffmpeg_path"), ffmpeg_layout)
+
+        self._fragment_combo = QComboBox()
+        fragment_options = [
+            (tr("fragment_concurrency_reliable"), 1),
+            (tr("fragment_concurrency_balanced"), 2),
+            (tr("fragment_concurrency_fast"), 4),
+        ]
+        for label, value in fragment_options:
+            self._fragment_combo.addItem(label, value)
+        form.addRow(tr("settings_fragment_concurrency"), self._fragment_combo)
 
         layout.addLayout(form)
 
@@ -187,6 +208,10 @@ class SettingsDialog(QDialog):
         ffmpeg_path = settings.get("ffmpeg_path", "")
         if ffmpeg_path:
             self._ffmpeg_input.setText(ffmpeg_path)
+        fragment_concurrency = get_fragment_concurrency(settings)
+        idx = self._fragment_combo.findData(fragment_concurrency)
+        if idx >= 0:
+            self._fragment_combo.setCurrentIndex(idx)
 
         auth = settings.get("auth", {})
         method = auth.get("method", "")
@@ -213,6 +238,7 @@ class SettingsDialog(QDialog):
         settings["language"] = lang
         settings["default_path"] = self._path_input.text()
         settings["ffmpeg_path"] = self._ffmpeg_input.text()
+        settings["fragment_concurrency"] = self._fragment_combo.currentData()
 
         auth_id = self._auth_group.checkedId()
         if auth_id == 1:

@@ -16,7 +16,8 @@ class DownloadWorker(QThread):
 
     def __init__(self, url, output_path, format_id=None, playlist_subfolder=False,
                  ffmpeg_path=None, deno_path=None, selected_urls=None, per_video_settings=None,
-                 auth_opts=None, playlist_title=None, auth_rebuilder=None, parent=None):
+                 auth_opts=None, playlist_title=None, fragment_concurrency=2,
+                 auth_rebuilder=None, parent=None):
         super().__init__(parent)
         self.url = url
         self.output_path = output_path
@@ -28,6 +29,7 @@ class DownloadWorker(QThread):
         self.per_video_settings = per_video_settings or {}
         self.auth_opts = auth_opts or {}
         self.playlist_title = playlist_title
+        self.fragment_concurrency = fragment_concurrency
         self.auth_rebuilder = auth_rebuilder
         self._cancelled = False
 
@@ -115,7 +117,7 @@ class DownloadWorker(QThread):
             "fragment_retries": 30,
             "retries": 10,
             "retry_sleep_fragment": 3,
-            "concurrent_fragment_downloads": 4,
+            "concurrent_fragment_downloads": self.fragment_concurrency,
             "remote_components": ["ejs:github"],
             "js_runtimes": self._build_js_runtimes(),
             "progress_hooks": [self._progress_hook],

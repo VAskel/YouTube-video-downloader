@@ -16,7 +16,7 @@ from yt_dld.ui.format_selector import FormatSelector
 from yt_dld.ui.playlist_selector import PlaylistSelector
 from yt_dld.ui.progress_widget import ProgressWidget
 from yt_dld.ui.error_dialog import ErrorDialog
-from yt_dld.ui.settings_dialog import load_settings, get_auth_opts
+from yt_dld.ui.settings_dialog import load_settings, get_auth_opts, get_fragment_concurrency
 
 
 class DownloadTab(QWidget):
@@ -291,6 +291,7 @@ class DownloadTab(QWidget):
             per_video_settings=task.per_video_settings,
             auth_opts=self._auth_opts,
             playlist_title=task.playlist_title,
+            fragment_concurrency=self._fragment_concurrency(),
             auth_rebuilder=self._build_fresh_auth,
         )
         self._worker.progress.connect(self._progress_widget.update_progress)
@@ -307,6 +308,10 @@ class DownloadTab(QWidget):
         settings = load_settings()
         fresh = get_auth_opts(settings)
         return fresh
+
+    def _fragment_concurrency(self):
+        settings = load_settings()
+        return get_fragment_concurrency(settings)
 
     def _on_item_error(self, err):
         self._progress_widget._append_log(f"[✕] {err.get('title', '')}: {err.get('error', '')}")
