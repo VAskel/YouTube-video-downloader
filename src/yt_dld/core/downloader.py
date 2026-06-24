@@ -1,19 +1,25 @@
 import os
 import glob
-import logging
 
 from PySide6.QtCore import QThread, Signal
 import yt_dlp
 
 
-class _YtLogger(logging.NullHandler):
+class _YtLogger:
     def __init__(self, callback):
-        super().__init__()
         self._cb = callback
 
-    def handle(self, record):
-        if record.levelno >= logging.WARNING:
-            self._cb(f"[yt-dlp] {record.getMessage()}")
+    def debug(self, msg):
+        pass
+
+    def info(self, msg):
+        pass
+
+    def warning(self, msg):
+        self._cb(f"[yt-dlp] {msg}")
+
+    def error(self, msg):
+        self._cb(f"[yt-dlp] {msg}")
 
 
 class DownloadWorker(QThread):
@@ -202,67 +208,60 @@ class DownloadWorker(QThread):
         errors = []
         total = len(self.selected_urls)
 
-        logger_handler = _YtLogger(lambda msg: self.yt_log.emit(msg))
-        yt_logger = logging.getLogger("yt_dlp")
-        yt_logger.addHandler(logger_handler)
-        yt_logger.setLevel(logging.WARNING)
+        for i, u in enumerate(self.selected_urls):
+            if self._cancelled:
+                break
 
-        try:
-            for i, u in enumerate(self.selected_urls):
-                if self._cancelled:
-                    break
+            opts = dict(base_opts)
+            opts["logger"] = _YtLogger(lambda msg: self.yt_log.emit(msg))
 
-                opts = dict(base_opts)
+            if self.auth_rebuilder:
+                opts.update(self.auth_rebuilder())
 
-                if self.auth_rebuilder:
-                    opts.update(self.auth_rebuilder())
+            vsettings = self.per_video_settings.get(u, {})
 
-                vsettings = self.per_video_settings.get(u, {})
+            if vsettings.get("format"):
+                opts["format"] = vsettings["format"]
+            elif self.format_id and self.format_id != "best":
+                opts["format"] = self.format_id
 
-                if vsettings.get("format"):
-                    opts["format"] = vsettings["format"]
-                elif self.format_id and self.format_id != "best":
-                    opts["format"] = self.format_id
+            expected_dir = self.output_path
 
-                expected_dir = self.output_path
+            if vsettings.get("filename"):
+                if self.playlist_subfolder and self.playlist_title:
+                    expected_dir = os.path.join(self.output_path, self.playlist_title)
+                opts["outtmpl"] = os.path.join(
+                    expected_dir,
+                    vsettings["filename"] + ".%(ext)s",
+                )
+            elif self.playlist_title:
+                if self.playlist_subfolder:
+                    expected_dir = os.path.join(self.output_path, self.playlist_title)
+                counter = f"{i + 1:02d}"
+                opts["outtmpl"] = os.path.join(
+                    expected_dir,
+                    f"{counter} - %(title)s.%(ext)s",
+                )
 
-                if vsettings.get("filename"):
-                    if self.playlist_subfolder and self.playlist_title:
-                        expected_dir = os.path.join(self.output_path, self.playlist_title)
-                    opts["outtmpl"] = os.path.join(
-                        expected_dir,
-                        vsettings["filename"] + ".%(ext)s",
-                    )
-                elif self.playlist_title:
-                    if self.playlist_subfolder:
-                        expected_dir = os.path.join(self.output_path, self.playlist_title)
-                    counter = f"{i + 1:02d}"
-                    opts["outtmpl"] = os.path.join(
-                        expected_dir,
-                        f"{counter} - %(title)s.%(ext)s",
-                    )
+            display_name = vsettings.get("filename") or f"#{i + 1}"
+            self.progress.emit({
+                "status": "downloading",
+                "percent": 0,
+                "total_bytes": 0,
+                "downloaded_bytes": 0,
+                "speed": 0,
+                "eta": 0,
+                "filename": display_name,
+                "playlist_index": i + 1,
+                "playlist_count": total,
+            })
 
-                display_name = vsettings.get("filename") or f"#{i + 1}"
-                self.progress.emit({
-                    "status": "downloading",
-                    "percent": 0,
-                    "total_bytes": 0,
-                    "downloaded_bytes": 0,
-                    "speed": 0,
-                    "eta": 0,
-                    "filename": display_name,
-                    "playlist_index": i + 1,
-                    "playlist_count": total,
-                })
-
-                try:
-                    self._download_one(opts, u, expected_dir, display_name)
-                except Exception as e:
-                    err = {"url": u, "title": display_name, "error": str(e)}
-                    errors.append(err)
-                    self.item_error.emit(err)
-        finally:
-            yt_logger.removeHandler(logger_handler)
+            try:
+                self._download_one(opts, u, expected_dir, display_name)
+            except Exception as e:
+                err = {"url": u, "title": display_name, "error": str(e)}
+                errors.append(err)
+                self.item_error.emit(err)
 
         return errors
 
