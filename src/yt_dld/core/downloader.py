@@ -24,8 +24,33 @@ class DownloadWorker(QThread):
         self.auth_opts = auth_opts or {}
         self._cancelled = False
 
-    def cancel(self):
+    def     cancel(self):
         self._cancelled = True
+
+    def _postprocess_hook(self, d):
+        if self._cancelled:
+            raise Exception("Cancelled")
+
+        status = d.get("status", "")
+        postprocessor = d.get("postprocessor", "")
+        filename = d.get("info_dict", {}).get("filepath", "") or d.get("filename", "")
+        if filename:
+            filename = os.path.splitext(os.path.basename(filename))[0]
+
+        if status == "started":
+            self.progress.emit({
+                "status": "processing",
+                "percent": 95,
+                "filename": filename,
+                "processing_stage": f"[{postprocessor}]",
+            })
+        elif status == "finished":
+            self.progress.emit({
+                "status": "finished",
+                "percent": 100,
+                "filename": filename,
+                "_is_final": True,
+            })
 
     def _progress_hook(self, d):
         if self._cancelled:
@@ -82,6 +107,7 @@ class DownloadWorker(QThread):
             "merge_output_format": "mp4",
             "ignoreerrors": True,
             "progress_hooks": [self._progress_hook],
+            "postprocessor_hooks": [self._postprocess_hook],
         }
 
         if self.format_id and self.format_id != "best":

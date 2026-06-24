@@ -77,13 +77,22 @@ class ProgressWidget(QWidget):
                 self._last_logged_fn = fn
                 self._append_log(f"[↓] {fn}")
 
+        elif status == "processing":
+            self._speed_label.setText("")
+            self._eta_label.setText("")
+            stage = data.get("processing_stage", "")
+            self._playlist_label.setText(stage)
+            fn = data.get("filename", "")
+            if fn and fn != self._last_logged_fn:
+                self._append_log(f"[⧖] {fn}")
+
         elif status == "finished":
             self._progress_bar.setValue(100)
             self._speed_label.setText("")
             self._eta_label.setText("")
             self._playlist_label.setText("")
             fn = data.get("filename", "")
-            if fn:
+            if fn and data.get("_is_final"):
                 self._append_log(f"[✓] {fn}")
 
     def reset(self):
