@@ -162,16 +162,21 @@ jobs:
       - name: Download FFmpeg (Linux)
         run: |
           mkdir -p bin/ffmpeg-linux
-          curl -SL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o /tmp/ffmpeg.tar.xz
-          tar -xf /tmp/ffmpeg.tar.xz -C /tmp/
-          cp /tmp/ffmpeg-*-amd64-static/ffmpeg bin/ffmpeg-linux/
-          cp /tmp/ffmpeg-*-amd64-static/ffprobe bin/ffmpeg-linux/
+          curl -fsSL --retry 5 --retry-delay 5 \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
+            -o /tmp/ffmpeg-linux.tar.xz
+          tar -xf /tmp/ffmpeg-linux.tar.xz -C /tmp/
+          FFMPEG_DIR="$(find /tmp -maxdepth 1 -type d -name 'ffmpeg-*-linux64-gpl' | head -1)"
+          cp "$FFMPEG_DIR/bin/ffmpeg" bin/ffmpeg-linux/
+          cp "$FFMPEG_DIR/bin/ffprobe" bin/ffmpeg-linux/
           chmod +x bin/ffmpeg-linux/ffmpeg bin/ffmpeg-linux/ffprobe
 
       - name: Download Deno (Linux)
         run: |
           mkdir -p bin/deno-linux
-          curl -SL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o /tmp/deno.zip
+          curl -fsSL --retry 5 --retry-delay 5 \
+            "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" \
+            -o /tmp/deno.zip
           unzip -o /tmp/deno.zip -d bin/deno-linux/
           chmod +x bin/deno-linux/deno
 

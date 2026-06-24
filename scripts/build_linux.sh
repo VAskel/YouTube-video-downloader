@@ -10,17 +10,22 @@ mkdir -p "$BIN_DIR/ffmpeg-linux" "$BIN_DIR/deno-linux"
 # Download ffmpeg for Linux if not present
 if [ ! -f "$BIN_DIR/ffmpeg-linux/ffmpeg" ]; then
     echo "Downloading ffmpeg for Linux..."
-    curl -SL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o /tmp/ffmpeg-linux.tar.xz
+    curl -fsSL --retry 5 --retry-delay 5 \
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
+        -o /tmp/ffmpeg-linux.tar.xz
     tar -xf /tmp/ffmpeg-linux.tar.xz -C /tmp/
-    cp /tmp/ffmpeg-*-amd64-static/ffmpeg "$BIN_DIR/ffmpeg-linux/"
-    cp /tmp/ffmpeg-*-amd64-static/ffprobe "$BIN_DIR/ffmpeg-linux/"
-    rm -rf /tmp/ffmpeg-linux.tar.xz /tmp/ffmpeg-*-amd64-static/
+    FFMPEG_DIR="$(find /tmp -maxdepth 1 -type d -name 'ffmpeg-*-linux64-gpl' | head -1)"
+    cp "$FFMPEG_DIR/bin/ffmpeg" "$BIN_DIR/ffmpeg-linux/"
+    cp "$FFMPEG_DIR/bin/ffprobe" "$BIN_DIR/ffmpeg-linux/"
+    rm -rf /tmp/ffmpeg-linux.tar.xz "$FFMPEG_DIR"
 fi
 
 # Download Linux Deno if not present
 if [ ! -f "$BIN_DIR/deno-linux/deno" ]; then
     echo "Downloading Deno for Linux..."
-    curl -SL "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" -o /tmp/deno-linux.zip
+    curl -fsSL --retry 5 --retry-delay 5 \
+        "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip" \
+        -o /tmp/deno-linux.zip
     unzip -o /tmp/deno-linux.zip -d "$BIN_DIR/deno-linux/"
     rm /tmp/deno-linux.zip
     chmod +x "$BIN_DIR/deno-linux/deno"
