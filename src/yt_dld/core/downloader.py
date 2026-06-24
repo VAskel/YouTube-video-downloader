@@ -115,7 +115,7 @@ class DownloadWorker(QThread):
             "fragment_retries": 30,
             "retries": 10,
             "retry_sleep_fragment": 3,
-            "concurrent_fragment_downloads": 1,
+            "concurrent_fragment_downloads": 4,
             "remote_components": ["ejs:github"],
             "js_runtimes": self._build_js_runtimes(),
             "progress_hooks": [self._progress_hook],
