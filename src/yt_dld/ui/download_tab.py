@@ -280,8 +280,6 @@ class DownloadTab(QWidget):
         self._progress_widget.reset()
         self._progress_widget._append_log(f"[▶] {tr('queue_downloading') % title}")
 
-        self._fetch_btn.setEnabled(False)
-
         self._worker = DownloadWorker(
             url=task["url"],
             output_path=task["output_path"],
