@@ -9,6 +9,7 @@ STRINGS = {
     "fetch_formats": {"ru": "Получить форматы", "en": "Fetch Formats"},
     "download": {"ru": "Скачать", "en": "Download"},
     "cancel": {"ru": "Отмена", "en": "Cancel"},
+    "stop": {"ru": "Стоп", "en": "Stop"},
     "output_path": {"ru": "Сохранить в:", "en": "Save to:"},
     "browse": {"ru": "Обзор...", "en": "Browse..."},
     "playlist_subfolder": {"ru": "Создать подпапку плейлиста", "en": "Create playlist subfolder"},

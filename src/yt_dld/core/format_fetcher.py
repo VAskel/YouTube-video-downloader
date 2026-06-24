@@ -7,7 +7,7 @@ class FormatFetcher:
         opts = {
             "quiet": True,
             "no_warnings": True,
-            "extract_flat": False,
+            "extract_flat": "in_playlist",
             "ignoreerrors": True,
         }
         if auth_opts:
@@ -43,7 +43,7 @@ class FormatFetcher:
                     )
                     entries.append({
                         "index": idx + 1,
-                        "title": entry.get("title", f"Video #{idx + 1}"),
+                        "title": entry.get("title") or entry.get("fulltitle", f"Video #{idx + 1}"),
                         "url": entry_url,
                         "available": not is_unavailable,
                         "duration": entry.get("duration"),

@@ -49,9 +49,14 @@ class DownloadTab(QWidget):
         self._cancel_btn = QPushButton(tr("cancel"))
         self._cancel_btn.clicked.connect(self._on_cancel)
         self._cancel_btn.setEnabled(False)
+        self._stop_btn = QPushButton(tr("stop"))
+        self._stop_btn.clicked.connect(self._on_stop)
+        self._stop_btn.setEnabled(False)
+        self._stop_btn.setStyleSheet("color: #D32F2F;")
 
         btn_layout.addWidget(self._fetch_btn)
         btn_layout.addWidget(self._cancel_btn)
+        btn_layout.addWidget(self._stop_btn)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -295,6 +300,7 @@ class DownloadTab(QWidget):
         self._worker.error.connect(self._on_error)
 
         self._cancel_btn.setEnabled(True)
+        self._stop_btn.setEnabled(True)
         self._worker.start()
 
     def _build_fresh_auth(self):
@@ -318,8 +324,28 @@ class DownloadTab(QWidget):
 
         self._update_queue_display()
         self._cancel_btn.setEnabled(False)
+        self._stop_btn.setEnabled(False)
         self._queue_busy = False
         self._process_next_task()
+
+    def _on_stop(self):
+        if self._worker and self._worker.isRunning():
+            self._worker.cancel()
+            self._worker.quit()
+            self._worker.wait(3000)
+
+        if self._current_task:
+            self._current_task["status"] = "cancelled"
+            self._current_task = None
+
+        for t in self._queue:
+            if t["status"] == "pending":
+                t["status"] = "cancelled"
+
+        self._progress_widget._append_log("[⊘] Stopped — queue cleared")
+        self._cleanup_queue()
+        self._queue_busy = False
+        self._reset_buttons()
 
     def _on_finished(self, url, path, errors=None):
         display_title = self._current_task.get("playlist_title") if self._current_task else url
@@ -371,6 +397,17 @@ class DownloadTab(QWidget):
         self._queue_group.setVisible(False)
         self.queue_changed.emit(0)
 
+    def _cleanup_queue(self):
+        self._queue = [t for t in self._queue if t["status"] != "cancelled"]
+        self._queue_list.clear()
+        for i, t in enumerate(self._queue):
+            self._add_to_queue_list(t, i)
+        self._update_queue_display()
+        self.queue_changed.emit(len(self._queue))
+        if not self._queue:
+            self._queue_group.setVisible(False)
+
     def _reset_buttons(self):
         self._fetch_btn.setEnabled(True)
         self._cancel_btn.setEnabled(False)
+        self._stop_btn.setEnabled(False)
