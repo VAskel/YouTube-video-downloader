@@ -296,6 +296,7 @@ class DownloadTab(QWidget):
         self._worker.item_error.connect(self._on_item_error)
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
+        self._worker.yt_log.connect(self._progress_widget._append_log)
 
         self._cancel_btn.setEnabled(True)
         self._stop_btn.setEnabled(True)

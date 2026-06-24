@@ -1,7 +1,19 @@
 import os
+import glob
+import logging
 
 from PySide6.QtCore import QThread, Signal
 import yt_dlp
+
+
+class _YtLogger(logging.NullHandler):
+    def __init__(self, callback):
+        super().__init__()
+        self._cb = callback
+
+    def handle(self, record):
+        if record.levelno >= logging.WARNING:
+            self._cb(f"[yt-dlp] {record.getMessage()}")
 
 
 class DownloadWorker(QThread):
@@ -9,6 +21,7 @@ class DownloadWorker(QThread):
     item_error = Signal(dict)
     finished = Signal(str, str, object)
     error = Signal(str)
+    yt_log = Signal(str)
 
     def __init__(self, url, output_path, format_id=None, playlist_subfolder=False,
                  ffmpeg_path=None, selected_urls=None, per_video_settings=None,
@@ -26,7 +39,7 @@ class DownloadWorker(QThread):
         self.auth_rebuilder = auth_rebuilder
         self._cancelled = False
 
-    def     cancel(self):
+    def cancel(self):
         self._cancelled = True
 
     def _postprocess_hook(self, d):
@@ -125,6 +138,27 @@ class DownloadWorker(QThread):
 
         return opts
 
+    def _verify_output(self, out_dir, display_name):
+        mp4_files = glob.glob(os.path.join(out_dir, "*.mp4"))
+        part_files = glob.glob(os.path.join(out_dir, "*.part"))
+        ytdl_files = glob.glob(os.path.join(out_dir, "*.ytdl"))
+        tmp_files = part_files + ytdl_files
+
+        newest_mp4 = None
+        if mp4_files:
+            newest_mp4 = max(mp4_files, key=os.path.getmtime)
+
+        if newest_mp4 and os.path.getsize(newest_mp4) > 0:
+            return True
+
+        if tmp_files:
+            names = [os.path.basename(f) for f in tmp_files[:5]]
+            suffix = f" +{len(tmp_files) - 5} more" if len(tmp_files) > 5 else ""
+            self.yt_log.emit(
+                f"[!] {display_name}: {len(tmp_files)} leftover file(s): {', '.join(names)}{suffix}"
+            )
+        return False
+
     def run(self):
         errors = []
         try:
@@ -144,60 +178,74 @@ class DownloadWorker(QThread):
         errors = []
         total = len(self.selected_urls)
 
-        for i, u in enumerate(self.selected_urls):
-            if self._cancelled:
-                break
+        logger_handler = _YtLogger(lambda msg: self.yt_log.emit(msg))
+        yt_logger = logging.getLogger("yt_dlp")
+        yt_logger.addHandler(logger_handler)
+        yt_logger.setLevel(logging.WARNING)
 
-            opts = dict(base_opts)
+        try:
+            for i, u in enumerate(self.selected_urls):
+                if self._cancelled:
+                    break
 
-            if self.auth_rebuilder:
-                opts.update(self.auth_rebuilder())
+                opts = dict(base_opts)
 
-            vsettings = self.per_video_settings.get(u, {})
+                if self.auth_rebuilder:
+                    opts.update(self.auth_rebuilder())
 
-            if vsettings.get("format"):
-                opts["format"] = vsettings["format"]
-            elif self.format_id and self.format_id != "best":
-                opts["format"] = self.format_id
+                vsettings = self.per_video_settings.get(u, {})
 
-            if vsettings.get("filename"):
-                out_dir = self.output_path
-                if self.playlist_subfolder and self.playlist_title:
-                    out_dir = os.path.join(self.output_path, self.playlist_title)
-                opts["outtmpl"] = os.path.join(
-                    out_dir,
-                    vsettings["filename"] + ".%(ext)s",
-                )
-            elif self.playlist_title:
-                counter = f"{i + 1:02d}"
-                out_dir = self.output_path
-                if self.playlist_subfolder:
-                    out_dir = os.path.join(self.output_path, self.playlist_title)
-                opts["outtmpl"] = os.path.join(
-                    out_dir,
-                    f"{counter} - %(title)s.%(ext)s",
-                )
+                if vsettings.get("format"):
+                    opts["format"] = vsettings["format"]
+                elif self.format_id and self.format_id != "best":
+                    opts["format"] = self.format_id
 
-            display_name = vsettings.get("filename") or f"#{i + 1}"
-            self.progress.emit({
-                "status": "downloading",
-                "percent": 0,
-                "total_bytes": 0,
-                "downloaded_bytes": 0,
-                "speed": 0,
-                "eta": 0,
-                "filename": display_name,
-                "playlist_index": i + 1,
-                "playlist_count": total,
-            })
+                expected_dir = self.output_path
 
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    ydl.download([u])
-            except Exception as e:
-                err = {"url": u, "title": display_name, "error": str(e)}
-                errors.append(err)
-                self.item_error.emit(err)
+                if vsettings.get("filename"):
+                    if self.playlist_subfolder and self.playlist_title:
+                        expected_dir = os.path.join(self.output_path, self.playlist_title)
+                    opts["outtmpl"] = os.path.join(
+                        expected_dir,
+                        vsettings["filename"] + ".%(ext)s",
+                    )
+                elif self.playlist_title:
+                    if self.playlist_subfolder:
+                        expected_dir = os.path.join(self.output_path, self.playlist_title)
+                    counter = f"{i + 1:02d}"
+                    opts["outtmpl"] = os.path.join(
+                        expected_dir,
+                        f"{counter} - %(title)s.%(ext)s",
+                    )
+
+                display_name = vsettings.get("filename") or f"#{i + 1}"
+                self.progress.emit({
+                    "status": "downloading",
+                    "percent": 0,
+                    "total_bytes": 0,
+                    "downloaded_bytes": 0,
+                    "speed": 0,
+                    "eta": 0,
+                    "filename": display_name,
+                    "playlist_index": i + 1,
+                    "playlist_count": total,
+                })
+
+                try:
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        ydl.download([u])
+
+                    if not self._verify_output(expected_dir, display_name):
+                        err_msg = "Output file not found — leftover .part files detected"
+                        err = {"url": u, "title": display_name, "error": err_msg}
+                        errors.append(err)
+                        self.item_error.emit(err)
+                except Exception as e:
+                    err = {"url": u, "title": display_name, "error": str(e)}
+                    errors.append(err)
+                    self.item_error.emit(err)
+        finally:
+            yt_logger.removeHandler(logger_handler)
 
         return errors
 
