@@ -118,6 +118,11 @@ class DownloadWorker(QThread):
             "no_warnings": True,
             "merge_output_format": "mp4",
             "ignoreerrors": True,
+            "continuedl": True,
+            "fragment_retries": 30,
+            "retries": 10,
+            "retry_sleep_fragment": 3,
+            "concurrent_fragment_downloads": 1,
             "progress_hooks": [self._progress_hook],
             "postprocessor_hooks": [self._postprocess_hook],
         }
@@ -137,6 +142,25 @@ class DownloadWorker(QThread):
             opts.update(extra)
 
         return opts
+
+    def _download_one(self, opts, url, expected_dir, display_name):
+        for attempt in range(1, 4):
+            if self._cancelled:
+                raise Exception("Cancelled")
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ydl.download([url])
+
+                if self._verify_output(expected_dir, display_name):
+                    return
+                err_msg = "Output file not found — leftover .part files detected"
+            except Exception as e:
+                err_msg = str(e)
+
+            if attempt < 3 and not self._cancelled:
+                self.yt_log.emit(f"[↻] {display_name}: retry {attempt + 1}/3 — {err_msg[:80]}")
+                continue
+            raise Exception(err_msg)
 
     def _verify_output(self, out_dir, display_name):
         mp4_files = glob.glob(os.path.join(out_dir, "*.mp4"))
@@ -232,14 +256,7 @@ class DownloadWorker(QThread):
                 })
 
                 try:
-                    with yt_dlp.YoutubeDL(opts) as ydl:
-                        ydl.download([u])
-
-                    if not self._verify_output(expected_dir, display_name):
-                        err_msg = "Output file not found — leftover .part files detected"
-                        err = {"url": u, "title": display_name, "error": err_msg}
-                        errors.append(err)
-                        self.item_error.emit(err)
+                    self._download_one(opts, u, expected_dir, display_name)
                 except Exception as e:
                     err = {"url": u, "title": display_name, "error": str(e)}
                     errors.append(err)
