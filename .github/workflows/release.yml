@@ -18,7 +18,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install yt-dlp PySide6 pyinstaller
+          pip install yt-dlp==2026.6.9 PySide6 pyinstaller
 
       - name: Download FFmpeg (macOS)
         run: |
@@ -81,7 +81,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install yt-dlp PySide6 pyinstaller
+        run: pip install yt-dlp==2026.6.9 PySide6 pyinstaller
 
       - name: Download FFmpeg (Windows)
         run: |
@@ -157,7 +157,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install yt-dlp PySide6 pyinstaller
+          pip install yt-dlp==2026.6.9 PySide6 pyinstaller
 
       - name: Download FFmpeg (Linux)
         run: |

@@ -7,6 +7,10 @@ from yt_dld.core.playlist_downloader import PlaylistDownloader
 from yt_dld.core.video_downloader import DownloadCancelled, VideoDownloader, VideoDownloadSpec
 
 
+def _retry_sleep(n=0):
+    return min(2 + n * 2, 15)
+
+
 class DownloadWorker(QThread):
     progress = Signal(dict)
     item_error = Signal(dict)
@@ -116,9 +120,17 @@ class DownloadWorker(QThread):
             "continuedl": True,
             "fragment_retries": 30,
             "retries": 10,
-            "retry_sleep_fragment": 3,
+            "file_access_retries": 5,
+            "extractor_retries": 8,
+            "socket_timeout": 30,
+            "retry_sleep_functions": {
+                "http": _retry_sleep,
+                "fragment": _retry_sleep,
+                "file_access": _retry_sleep,
+                "extractor": _retry_sleep,
+            },
             "concurrent_fragment_downloads": self.fragment_concurrency,
-            "remote_components": ["ejs:github"],
+            "remote_components": ["ejs:npm", "ejs:github"],
             "js_runtimes": self._build_js_runtimes(),
             "progress_hooks": [self._progress_hook],
             "postprocessor_hooks": [self._postprocess_hook],

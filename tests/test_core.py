@@ -388,6 +388,20 @@ class TestDownloadWorkerOptions(unittest.TestCase):
 
         self.assertEqual(opts["concurrent_fragment_downloads"], 1)
 
+    def test_build_opts_uses_resilient_network_defaults(self):
+        worker = DownloadWorker(
+            url="https://example.test/video",
+            output_path="/tmp",
+        )
+
+        opts = worker._build_opts()
+
+        self.assertEqual(opts["extractor_retries"], 8)
+        self.assertEqual(opts["socket_timeout"], 30)
+        self.assertEqual(opts["remote_components"], ["ejs:npm", "ejs:github"])
+        self.assertIn("fragment", opts["retry_sleep_functions"])
+        self.assertEqual(opts["retry_sleep_functions"]["extractor"](n=2), 6)
+
 
 class TestI18n(unittest.TestCase):
     def test_tr_en(self):
